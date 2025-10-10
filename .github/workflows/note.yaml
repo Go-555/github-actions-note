@@ -66,15 +66,16 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Claude Code SDK
+      - name: Install Claude Code CLI and Agent SDK
         run: |
           npm init -y
-          npm i @anthropic-ai/claude-code
+          npm install -g @anthropic-ai/claude-code
+          npm i @anthropic-ai/claude-agent-sdk
 
       - name: Research with Claude Code SDK
         run: |
           cat > research.mjs <<'EOF'
-          import { query } from '@anthropic-ai/claude-code';
+          import { query } from '@anthropic-ai/claude-agent-sdk';
           import fs from 'fs';
           const theme = process.env.THEME || '';
           const target = process.env.TARGET || '';
