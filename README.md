@@ -2,10 +2,24 @@
 
 このリポジトリの `.github/workflows/note.yaml` は、以下のパイプラインをGitHub Actionsで実行します。
 
-1) **リサーチAgent**: Claude Code SDK の WebSearch / WebFetch によるリサーチレポート作成
-2) **執筆Agent**: Anthropic Claude 4.0 Sonnet でタイトル/本文/タグ(JSON)を生成
-3) **ファクトチェックAgent**: Tavily を使った検証結果を反映し本文を修正
+1) **リサーチAgent**: Google Gemini 1.5 Pro + Google Search grounding によるリサーチレポート作成
+2) **執筆Agent**: Google Gemini 1.5 Pro でタイトル/本文/タグ(JSON)を生成
+3) **ファクトチェックAgent**: Google Gemini 1.5 Pro の検索ツールを用いた検証結果を反映し本文を修正
 4) **ドラフトAgent**: Playwrightで note.com に下書き/公開（storageState を利用）
+
+## 現在の状況
+
+- ワークフローは Gemini 1.5 Pro を中心に再構成済みですが、GitHub Actions 上での通し実行テストはまだ行っていません。
+- `GEMINI_API_KEY` が未設定の場合はリサーチ/執筆/ファクトチェックの各ジョブが即時に失敗します。Google Cloud プロジェクトで Gemini API と Google Search Tool の利用権限が有効になっていることを確認してください。
+- note.com への投稿部分は Playwright を使用する既存実装を流用しているため、以前と同様に `NOTE_STORAGE_STATE_JSON` の鮮度管理が必要です。
+- Perplexity 併用版（`.github/workflows/note-perplexity.yaml`）も Gemini ベースに置き換えていますが、こちらも実運用前に Secrets とActions権限を設定した上での試験実行を推奨します。
+
+## 反映状態と次のアクション
+
+- **反映状況**: `main` ブランチには Gemini 版ワークフローがすでに取り込まれており、追加のデプロイ作業は不要です。GitHub Actions の手動実行を開始すれば現行構成で動作します。
+- **必要な設定**: `GEMINI_API_KEY` と `NOTE_STORAGE_STATE_JSON` を含む Secrets が未登録の場合は、ワークフローが開始直後に失敗します。必要に応じて `PERPLEXITY_API_KEY` も追加してください。
+- **検証のお願い**: 本番利用前に「dry_run: true」で少なくとも1回通しで実行し、生成物とログを確認してください。Playwright 操作やGoogle Search Toolの権限不足がないか検証することをおすすめします。
+- **運用開始の目安**: 上記の事前テストで問題がなければ、`dry_run: false`・`is_public` の設定に応じてドラフト保存/公開まで実行できます。異常が見つかった場合はGitHub Actionsのログと `.note-artifacts` のアーティファクトを参照して調査してください。
 
 ---
 
@@ -13,9 +27,9 @@
 
 以下の環境変数をGitHub Actionsのリポジトリシークレットに設定してください：
 
-- `ANTHROPIC_API_KEY`（必須）- Claude APIキー
-- `TAVILY_API_KEY`（必須）- Tavily検索APIキー
+- `GEMINI_API_KEY`（必須）- Google Gemini APIキー
 - `NOTE_STORAGE_STATE_JSON`（必須）- note.comのログイン状態（後述の手順で取得）
+- `PERPLEXITY_API_KEY`（任意）- Perplexity検索APIキー（Perplexity版ワークフローを利用する場合）
 
 ---
 
@@ -116,9 +130,9 @@ node login-note.mjs
 
 ## 動作イメージ
 
-1. **Research ジョブ**: Claude Code SDK を使用してWebSearchとWebFetchでリサーチを実行
-2. **Write ジョブ**: Claude Sonnet 4.0 でタイトル、本文、タグを生成
-3. **Fact-check ジョブ**: Tavily API で事実確認を行い、本文を修正
+1. **Research ジョブ**: GeminiのGoogle検索ツールを使用して最新の一次情報を収集しMarkdownレポートを生成
+2. **Write ジョブ**: Gemini 1.5 Proがリサーチ内容からnote記事のタイトル・本文・タグをJSONで生成
+3. **Fact-check ジョブ**: Gemini 1.5 ProがGoogle検索ツールで事実確認し、本文に反映
 4. **Post ジョブ**: Playwright でnote.comに自動投稿
    - `is_public: false` の場合は「下書き保存」
    - `is_public: true` の場合は「公開」
@@ -141,9 +155,8 @@ node login-note.mjs
 ## 技術スタック
 
 - **GitHub Actions**: CI/CDパイプライン
-- **Claude Code SDK**: リサーチAgent（WebSearch/WebFetch）
-- **AI SDK (Anthropic)**: 執筆・ファクトチェックAgent
-- **Tavily API**: 事実確認・検証
+- **Google Gemini API (@google/generative-ai)**: リサーチ・執筆・ファクトチェックAgent
+- **Perplexity API**: オプションのリサーチデータ取得
 - **Playwright**: note.com への自動投稿
 - **marked**: Markdown to HTML変換
 
@@ -159,7 +172,6 @@ node login-note.mjs
 
 ## 参考
 
-- [Claude Code SDK](https://github.com/anthropics/anthropic-claude-code)
-- [AI SDK (Anthropic)](https://sdk.vercel.ai/docs)
-- [Tavily API](https://docs.tavily.com/)
+- [Google Gemini API](https://ai.google.dev/)
+- [Perplexity API](https://docs.perplexity.ai/)
 - [Playwright](https://playwright.dev/)
