@@ -2,14 +2,14 @@
 
 このリポジトリの `.github/workflows/note.yaml` は、以下のパイプラインをGitHub Actionsで実行します。
 
-1) **リサーチAgent**: Google Gemini 1.5 Pro + Google Search grounding によるリサーチレポート作成
-2) **執筆Agent**: Google Gemini 1.5 Pro でタイトル/本文/タグ(JSON)を生成
-3) **ファクトチェックAgent**: Google Gemini 1.5 Pro の検索ツールを用いた検証結果を反映し本文を修正
+1) **リサーチAgent**: Google Gemini 1.5 Pro (latest) + Google Search grounding によるリサーチレポート作成
+2) **執筆Agent**: Google Gemini 1.5 Pro (latest) でタイトル/本文/タグ(JSON)を生成
+3) **ファクトチェックAgent**: Google Gemini 1.5 Pro (latest) の検索ツールを用いた検証結果を反映し本文を修正
 4) **ドラフトAgent**: Playwrightで note.com に下書き/公開（storageState を利用）
 
 ## 現在の状況
 
-- ワークフローは Gemini 1.5 Pro を中心に再構成済みですが、GitHub Actions 上での通し実行テストはまだ行っていません。
+- ワークフローは Gemini 1.5 Pro (latest) を中心に再構成済みですが、GitHub Actions 上での通し実行テストはまだ行っていません。
 - `GEMINI_API_KEY` が未設定の場合はリサーチ/執筆/ファクトチェックの各ジョブが即時に失敗します。Google Cloud プロジェクトで Gemini API と Google Search Tool の利用権限が有効になっていることを確認してください。
 - note.com への投稿部分は Playwright を使用する既存実装を流用しているため、以前と同様に `NOTE_STORAGE_STATE_JSON` の鮮度管理が必要です。
 - Perplexity 併用版（`.github/workflows/note-perplexity.yaml`）も Gemini ベースに置き換えていますが、こちらも実運用前に Secrets とActions権限を設定した上での試験実行を推奨します。
@@ -131,8 +131,8 @@ node login-note.mjs
 ## 動作イメージ
 
 1. **Research ジョブ**: GeminiのGoogle検索ツールを使用して最新の一次情報を収集しMarkdownレポートを生成
-2. **Write ジョブ**: Gemini 1.5 Proがリサーチ内容からnote記事のタイトル・本文・タグをJSONで生成
-3. **Fact-check ジョブ**: Gemini 1.5 ProがGoogle検索ツールで事実確認し、本文に反映
+2. **Write ジョブ**: Gemini 1.5 Pro (latest) がリサーチ内容からnote記事のタイトル・本文・タグをJSONで生成
+3. **Fact-check ジョブ**: Gemini 1.5 Pro (latest) がGoogle検索ツールで事実確認し、本文に反映
 4. **Post ジョブ**: Playwright でnote.comに自動投稿
    - `is_public: false` の場合は「下書き保存」
    - `is_public: true` の場合は「公開」
@@ -155,7 +155,7 @@ node login-note.mjs
 ## 技術スタック
 
 - **GitHub Actions**: CI/CDパイプライン
-- **Google Gemini API (@google/generative-ai)**: リサーチ・執筆・ファクトチェックAgent
+- **Google Gemini API (@google/generative-ai)**: リサーチ・執筆・ファクトチェックAgent（`gemini-1.5-pro-latest` モデル）
 - **Perplexity API**: オプションのリサーチデータ取得
 - **Playwright**: note.com への自動投稿
 - **marked**: Markdown to HTML変換

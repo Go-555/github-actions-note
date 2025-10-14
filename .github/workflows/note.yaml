@@ -109,7 +109,7 @@ jobs:
 
           const genAI = new GoogleGenerativeAI(apiKey);
           const model = genAI.getGenerativeModel({
-            model: 'gemini-1.5-pro',
+            model: 'gemini-1.5-pro-latest',
             systemInstruction,
             tools: [{ googleSearch: {} }],
           });
@@ -211,7 +211,7 @@ jobs:
           function extractJsonFlexible(raw){const t=(raw||'').trim().replace(/\u200B/g,'');try{return JSON.parse(t);}catch{}const m=t.match(/```[a-zA-Z]*\s*([\s\S]*?)\s*```/);if(m&&m[1]){try{return JSON.parse(m[1].trim());}catch{}}const f=t.indexOf('{'),l=t.lastIndexOf('}');if(f!==-1&&l!==-1&&l>f){const c=t.slice(f,l+1);try{return JSON.parse(c);}catch{}}return null;}
           const genAI=new GoogleGenerativeAI(apiKey);
           const model=genAI.getGenerativeModel({
-            model: 'gemini-1.5-pro',
+            model: 'gemini-1.5-pro-latest',
             systemInstruction: 'note.com向け長文記事の生成。JSON {"title":string,"draftBody":string,"tags":string[]} で返答し、draftBodyは6000〜9000文字を目安に十分な分量で章立てと箇条書きを含めること。',
           });
           function readText(response){
@@ -225,7 +225,7 @@ jobs:
             return parts.map(p=>p.text).filter(Boolean).join('\n');
           }
           async function repairJson(raw){
-            const repairModel=genAI.getGenerativeModel({ model: 'gemini-1.5-pro', systemInstruction: '入力されたテキストから {"title":string,"draftBody":string,"tags":string[]} のJSONのみを返答してください。' });
+            const repairModel=genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest', systemInstruction: '入力されたテキストから {"title":string,"draftBody":string,"tags":string[]} のJSONのみを返答してください。' });
             const result=await repairModel.generateContent({ contents:[{role:'user',parts:[{text:String(raw||'')}]}], generationConfig:{temperature:0,maxOutputTokens:2048} });
             return extractJsonFlexible(readText(result.response));
           }
@@ -339,7 +339,7 @@ jobs:
             '引用追加時は本文内にMarkdownリンクを埋め込み、必要に応じて参考文献セクションを追記してください。'
           ].join('\n');
           const model=genAI.getGenerativeModel({
-            model: 'gemini-1.5-pro',
+            model: 'gemini-1.5-pro-latest',
             systemInstruction,
             tools: [{ googleSearch: {} }],
           });
