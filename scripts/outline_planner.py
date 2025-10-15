@@ -20,19 +20,38 @@ class OutlinePlan:
 
 
 class OutlinePlanner:
-    def __init__(self, settings: GeneratorSettings, api_key: str) -> None:
+    def __init__(self, settings: GeneratorSettings, api_key: str, dry_run: bool = False) -> None:
         self.settings = settings
         self.logger = setup_logger("outline", settings.logs_dir)
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel(
-            model_name="gemini-1.5-pro-latest",
-            generation_config={
-                "temperature": 0.7,
-                "top_p": 0.9,
-            },
-        )
+        self.dry_run = dry_run
+        if not dry_run:
+            genai.configure(api_key=api_key)
+            self.model = genai.GenerativeModel(
+                model_name="gemini-1.5-pro-latest",
+                generation_config={
+                    "temperature": 0.7,
+                    "top_p": 0.9,
+                },
+            )
+        else:
+            self.model = None
 
     def create_plan(self, keyword: str, memo: str, references: List[str]) -> OutlinePlan:
+        if self.dry_run:
+            summary = f"{keyword} をテーマにした自動生成テストサマリー"
+            outline = self.settings.article.required_sections
+            return OutlinePlan(
+                title=f"{keyword}の最新動向",
+                summary=summary,
+                outline=list(outline),
+                tags=self.settings.defaults.tags,
+                image_briefs={
+                    "thumbnail": f"{keyword} を象徴するクリーンなビジュアル",
+                    "hero": f"{keyword} の課題と解決策を図解",
+                    "internals": [f"{keyword} の実践手順を図解"],
+                },
+            )
+
         schema = {
             "type": "object",
             "properties": {

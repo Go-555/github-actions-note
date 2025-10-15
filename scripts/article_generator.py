@@ -18,23 +18,30 @@ class GeneratedArticle:
 
 
 class ArticleGenerator:
-    def __init__(self, settings: GeneratorSettings, api_key: str) -> None:
+    def __init__(self, settings: GeneratorSettings, api_key: str, dry_run: bool = False) -> None:
         self.settings = settings
         self.logger = setup_logger("article", settings.logs_dir)
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel(
-            model_name="gemini-1.5-pro-latest",
-            generation_config={
-                "temperature": 0.65,
-                "top_p": 0.9,
-                "max_output_tokens": 8192,
-            },
-        )
+        self.dry_run = dry_run
+        if not dry_run:
+            genai.configure(api_key=api_key)
+            self.model = genai.GenerativeModel(
+                model_name="gemini-1.5-pro-latest",
+                generation_config={
+                    "temperature": 0.65,
+                    "top_p": 0.9,
+                    "max_output_tokens": 8192,
+                },
+            )
+        else:
+            self.model = None
 
     def generate(self, keyword: str, memo: str, plan: dict) -> GeneratedArticle:
         prompt = self._build_prompt(keyword, memo, plan)
-        response = self.model.generate_content([prompt])
-        text = response.text
+        if self.dry_run:
+            text = self._dummy_body(keyword, plan)
+        else:
+            response = self.model.generate_content([prompt])
+            text = response.text
         self.logger.info("Generated article body for '%s'", keyword)
         return GeneratedArticle(
             lead="",
@@ -60,3 +67,14 @@ class ArticleGenerator:
             "- 画像を差し込みたい箇所には '![代替テキスト](./assets/placeholder.jpg)' の形式で記載する（後で差し替える）\n"
             "- 日本語で書く\n"
         )
+
+    def _dummy_body(self, keyword: str, plan: dict) -> str:
+        sections = self.settings.article.required_sections
+        lines = [f"# {keyword} の最新戦略", "", "リード文: このコンテンツは自動生成のドライランです。実運用では Gemini がここに実際の本文を生成します。", ""]
+        for section in sections:
+            lines.append(f"## {section}")
+            lines.append("このセクションはダミー本文です。実運用時には具体的な洞察と手順が入ります。")
+            lines.append("")
+        lines.append("## 参考リンク")
+        lines.append("- https://example.com")
+        return "\n".join(lines)

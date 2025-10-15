@@ -31,8 +31,9 @@ def main() -> int:
     config = ConfigLoader(root).load()
     logger = setup_logger("batch", config.logs_dir)
 
+    dry_run = os.environ.get("DRY_RUN", "0") == "1"
     gemini_key = os.environ.get("GEMINI_API_KEY")
-    if not gemini_key:
+    if not gemini_key and not dry_run:
         logger.error("GEMINI_API_KEY is not set")
         return 1
     image_key = os.environ.get("IMAGE_API_KEY", gemini_key)
@@ -43,9 +44,9 @@ def main() -> int:
         logger.info("No tasks to process")
         return 0
 
-    outline = OutlinePlanner(config, gemini_key)
-    article_generator = ArticleGenerator(config, gemini_key)
-    image_generator = ImageGenerator(config, image_key)
+    outline = OutlinePlanner(config, gemini_key or "", dry_run=dry_run)
+    article_generator = ArticleGenerator(config, gemini_key or "", dry_run=dry_run)
+    image_generator = ImageGenerator(config, image_key or "", dry_run=dry_run)
     markdown_builder = MarkdownBuilder(config)
     queue_writer = QueueWriter(config)
     quality_gate = QualityGate(config)

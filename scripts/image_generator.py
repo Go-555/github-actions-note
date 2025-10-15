@@ -19,14 +19,18 @@ class GeneratedImages:
 
 
 class ImageGenerator:
-    def __init__(self, settings: GeneratorSettings, api_key: str) -> None:
+    def __init__(self, settings: GeneratorSettings, api_key: str, dry_run: bool = False) -> None:
         self.settings = settings
         self.logger = setup_logger("images", settings.logs_dir)
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel(model_name="imagen-3.0")
+        self.dry_run = dry_run
+        if not dry_run:
+            genai.configure(api_key=api_key)
+            self.model = genai.GenerativeModel(model_name="imagen-3.0")
+        else:
+            self.model = None
 
     def generate(self, slug: str, briefs: Dict[str, any]) -> GeneratedImages:
-        if not self.settings.images.enabled:
+        if not self.settings.images.enabled or self.dry_run:
             return self._placeholder(slug)
         assets_dir = self.settings.assets_dir
         assets_dir.mkdir(parents=True, exist_ok=True)
@@ -68,8 +72,13 @@ class ImageGenerator:
         hero = assets_dir / f"{slug}-hero.jpg"
         thumb.write_bytes(placeholder.read_bytes())
         hero.write_bytes(placeholder.read_bytes())
+        internals: List[Path] = []
+        for idx in range(1, self.settings.images.internal_count + 1):
+            internal = assets_dir / f"{slug}-internal{idx}.jpg"
+            internal.write_bytes(placeholder.read_bytes())
+            internals.append(internal)
         return GeneratedImages(
             thumbnail=thumb,
             hero=hero,
-            internals=[],
+            internals=internals,
         )
