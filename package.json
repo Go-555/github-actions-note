@@ -4,13 +4,15 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "generate": "node scripts/generate-queue.mjs",
+    "test": "echo \"No automated tests configured\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "gray-matter": "^4.0.3",
     "playwright": "^1.55.1"
   }
 }

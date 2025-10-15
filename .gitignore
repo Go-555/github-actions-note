@@ -1,5 +1,4 @@
-# 機密情報
-note-state.json
-
-# Node.js
 node_modules/
+.DS_Store
+note-state.json
+/tmp/

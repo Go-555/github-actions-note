@@ -1,0 +1,86 @@
+name: Post Article
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 * * * *'  # Every hour (UTC)
+
+permissions:
+  contents: write
+
+jobs:
+  post:
+    runs-on: ubuntu-24.04
+    env:
+      SCREENSHOT_DIR: /tmp/screens
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Select article from queue
+        id: select
+        run: |
+          node scripts/select-next-article.mjs
+
+      - name: Bail out if nothing to post
+        if: steps.select.outputs.path == ''
+        run: echo "No article selected; exiting."
+
+      - name: Restore note auth state from Secret (base64)
+        if: steps.select.outputs.path != ''
+        env:
+          NOTE_STATE_B64: ${{ secrets.NOTE_STATE_B64 }}
+        run: |
+          set -euo pipefail
+          test -n "$NOTE_STATE_B64" || { echo "Secret NOTE_STATE_B64 is empty"; exit 1; }
+          echo "$NOTE_STATE_B64" | base64 -d > /tmp/note-state.json
+          echo "NOTE_POST_MCP_STATE_PATH=/tmp/note-state.json" >> $GITHUB_ENV
+
+      - name: Publish article to note.com
+        if: steps.select.outputs.path != ''
+        env:
+          NOTE_POST_RESULT_PATH: /tmp/note-post-result.json
+          DEBUG: 'note-post-mcp:*'
+        run: |
+          set -euo pipefail
+          rm -rf "$SCREENSHOT_DIR"
+          mkdir -p "$SCREENSHOT_DIR"
+          node scripts/call-note-tool.mjs publish_note "${{ steps.select.outputs.path }}"
+
+      - name: Move article to posted folder
+        if: steps.select.outputs.path != ''
+        run: |
+          set -euo pipefail
+          note_url=$(jq -r '.url // empty' /tmp/note-post-result.json 2>/dev/null || true)
+          node scripts/mark-posted.mjs "${{ steps.select.outputs.path }}" "$note_url"
+
+      - name: Commit queue updates
+        if: steps.select.outputs.path != ''
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add articles-queue articles-posted sources/processed || true
+          git commit -m "chore: post queued article"
+          git push
+
+      - name: Upload screenshots
+        if: steps.select.outputs.path != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: note-screens
+          path: /tmp/screens
+          if-no-files-found: ignore
