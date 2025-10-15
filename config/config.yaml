@@ -2,6 +2,11 @@
 
 generator_version: "v1.0.0"
 locale: "ja-JP"
+memos:
+  inbox_dir: "inputs/memos"
+  trash_dir: "inputs/memos_trash"
+  daily_target: 24
+  research_keyword: "生成AI"
 article:
   min_chars: 3000
   max_chars: 5000
@@ -29,7 +34,7 @@ logs:
   dir: "logs"
 concurrency:
   daily_limit: 30
-  per_run_batch: 30
+  per_run_batch: 24
   max_parallel: 3
   jitter_sec:
     - 60

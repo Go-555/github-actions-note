@@ -16,6 +16,7 @@ from scripts.article_generator import ArticleGenerator
 from scripts.config_loader import ConfigLoader
 from scripts.image_generator import ImageGenerator
 from scripts.markdown_builder import MarkdownBuilder
+from scripts.memo_researcher import MemoResearcher
 from scripts.outline_planner import OutlinePlanner
 from scripts.queue_writer import QueueWriter
 from scripts.quality_gate import QualityGate
@@ -43,6 +44,9 @@ def main() -> int:
         return 1
     image_key = os.environ.get("IMAGE_API_KEY", gemini_key)
 
+    memo_researcher = MemoResearcher(config, gemini_key, dry_run=dry_run)
+    memo_researcher.ensure_inventory()
+
     task_loader = TaskLoader(config)
     tasks = task_loader.load_tasks()
     if not tasks:
@@ -63,7 +67,7 @@ def main() -> int:
     for task in tasks[: config.concurrency.per_run_batch]:
         log_payload: Dict[str, str] = {"keyword": task.keyword}
         try:
-            reference_contents = []
+            reference_contents: List[str] = []
             for ref_path in task.reference_paths:
                 try:
                     reference_contents.append(ref_path.read_text(encoding="utf-8"))
@@ -105,6 +109,8 @@ def main() -> int:
             log_payload["error"] = str(exc)
             failure += 1
         finally:
+            if task.memo_path:
+                memo_researcher.archive_memo(task.memo_path)
             append_jsonl(config.logs_dir / "run.jsonl", log_payload)
 
     logger.info("Batch finished: success=%s failure=%s", success, failure)

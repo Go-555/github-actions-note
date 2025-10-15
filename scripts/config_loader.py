@@ -34,6 +34,14 @@ class ImageConfig:
 
 
 @dataclass
+class MemoConfig:
+    inbox_dir: Path
+    trash_dir: Path
+    daily_target: int
+    research_keyword: str
+
+
+@dataclass
 class QueueConfig:
     out_dir: Path
     posted_dir: Path
@@ -69,6 +77,7 @@ class QualityGateConfig:
 class GeneratorSettings:
     generator_version: str
     locale: str
+    memos: MemoConfig
     article: ArticleConfig
     images: ImageConfig
     queue: QueueConfig
@@ -93,6 +102,12 @@ class ConfigLoader:
     def _parse(self, data: Dict[str, Any]) -> GeneratorSettings:
         article = ArticleConfig(**data["article"])
         images = ImageConfig(**data["images"])
+        memos = MemoConfig(
+            inbox_dir=self.root / data["memos"]["inbox_dir"],
+            trash_dir=self.root / data["memos"]["trash_dir"],
+            daily_target=data["memos"]["daily_target"],
+            research_keyword=data["memos"]["research_keyword"],
+        )
         queue = QueueConfig(
             out_dir=self.root / data["queue"]["out_dir"],
             posted_dir=self.root / data["queue"]["posted_dir"],
@@ -105,6 +120,7 @@ class ConfigLoader:
         return GeneratorSettings(
             generator_version=data["generator_version"],
             locale=data.get("locale", "ja-JP"),
+            memos=memos,
             article=article,
             images=images,
             queue=queue,
