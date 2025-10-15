@@ -67,22 +67,58 @@ class MemoResearcher:
                 }
                 for i in range(count)
             ]
+        schema = {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "summary": {"type": "string"},
+                    "bullets": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "maxItems": 5,
+                    },
+                },
+                "required": ["title", "summary", "bullets"],
+            },
+        }
         prompt = (
-            "あなたは技術調査担当です。キーワード '生成AI' に関する今週の注目トピックを"
-            f"{count} 件まとめ、JSON 形式で返してください。各件は title, summary, bullets(3項目) を持つオブジェクトとします。"
+            "あなたは技術調査担当です。キーワード '生成AI' に関する最新トピックを"
+            f"{count} 件まとめ、JSON 配列で返してください。各要素は title, summary, bullets(3項目) を含むオブジェクトとします。"
         )
-        response = self.model.generate_content([prompt])
         memos: List[dict] = []
         try:
-            text = response.text or ""
+            response = self.model.generate_content(
+                [prompt],
+                generation_config={
+                    "response_schema": schema,
+                    "response_mime_type": "application/json",
+                },
+            )
+            text = response.text or "[]"
             memos = json.loads(text)
         except Exception:  # noqa: BLE001
             self.logger.warning("Memo generation fallback")
         if not isinstance(memos, list):
             memos = []
         if len(memos) < count:
-            memos.extend(self._generate_memos(count - len(memos)))
+            memos.extend(self._dummy_memos(count - len(memos)))
         return memos[:count]
+
+    def _dummy_memos(self, count: int) -> List[dict]:
+        return [
+            {
+                "title": f"生成AIトピック（補完） {i+1}",
+                "summary": "生成AI市場や運用に関する最新情報を確認してください。",
+                "bullets": [
+                    "最新のリリース情報をウォッチ",
+                    "導入企業の成功事例を調査",
+                    "リスクとガバナンスの最新動向を整理",
+                ],
+            }
+            for i in range(count)
+        ]
 
     def _write_memo(self, memo: dict) -> None:
         title = memo.get("title") or "生成AIトピック"
