@@ -71,9 +71,15 @@ class ArticleGenerator:
     def _dummy_body(self, keyword: str, plan: dict) -> str:
         sections = self.settings.article.required_sections
         lines = [f"# {keyword} の最新戦略", "", "リード文: このコンテンツは自動生成のドライランです。実運用では Gemini がここに実際の本文を生成します。", ""]
+        filler = (
+            "このセクションはドライラン用のダミー本文です。実運用ではここに最新情報、統計データ、"
+            "実務で役立つノウハウが詳細に書き込まれます。テンプレートの長さを担保するために、"
+            "ダミーテキストを複数段落にわたって繰り返し追加しています。"
+        )
+        filler_paragraphs = "\n\n".join([filler for _ in range(8)])
         for section in sections:
             lines.append(f"## {section}")
-            lines.append("このセクションはダミー本文です。実運用時には具体的な洞察と手順が入ります。")
+            lines.append(filler_paragraphs)
             lines.append("")
         lines.append("## 参考リンク")
         lines.append("- https://example.com")
