@@ -1,6 +1,6 @@
 ---
 title: 生成AIリサーチ 1の最新動向
-uuid: 982b61ed-0d3a-4017-a0b5-d41bff0da1a9
+uuid: 17cce153-ea91-43c6-abe5-6beb0ac439cb
 summary: 生成AIリサーチ 1 をテーマにした自動生成テストサマリー
 tags:
 - Automation
@@ -8,7 +8,7 @@ tags:
 - note
 thumbnail: ./assets/sheng-cheng-airisati-1nozui-xin-dong-xiang-thumb.jpg
 hero_image: ./assets/sheng-cheng-airisati-1nozui-xin-dong-xiang-hero.jpg
-publish_at: '2025-10-17T15:51:00+09:00'
+publish_at: '2025-10-17T09:15:00+09:00'
 visibility: public
 canonical_url: ''
 series: 自動化で回すメディア運用

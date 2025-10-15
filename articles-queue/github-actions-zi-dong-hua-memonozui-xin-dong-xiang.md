@@ -1,6 +1,6 @@
 ---
 title: GitHub Actions 自動化メモの最新動向
-uuid: fd56be1d-ba61-4b37-9ff7-2c48b22efb1f
+uuid: fc68e53e-1506-4f59-be71-259bcf083375
 summary: GitHub Actions 自動化メモ をテーマにした自動生成テストサマリー
 tags:
 - Automation
@@ -8,7 +8,7 @@ tags:
 - note
 thumbnail: ./assets/github-actions-zi-dong-hua-memonozui-xin-dong-xiang-thumb.jpg
 hero_image: ./assets/github-actions-zi-dong-hua-memonozui-xin-dong-xiang-hero.jpg
-publish_at: '2025-10-17T09:25:00+09:00'
+publish_at: '2025-10-17T15:50:00+09:00'
 visibility: public
 canonical_url: ''
 series: 自動化で回すメディア運用
