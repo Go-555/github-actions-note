@@ -76,7 +76,7 @@ class ArticleGenerator:
             "実務で役立つノウハウが詳細に書き込まれます。テンプレートの長さを担保するために、"
             "ダミーテキストを複数段落にわたって繰り返し追加しています。"
         )
-        filler_paragraphs = "\n\n".join([filler for _ in range(8)])
+        filler_paragraphs = "\n\n".join([filler for _ in range(5)])
         for section in sections:
             lines.append(f"## {section}")
             lines.append(filler_paragraphs)
