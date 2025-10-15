@@ -30,10 +30,11 @@ class MemoResearcher:
         self.settings.memos.inbox_dir.mkdir(parents=True, exist_ok=True)
         self.settings.memos.trash_dir.mkdir(parents=True, exist_ok=True)
 
-    def ensure_inventory(self) -> None:
+    def ensure_inventory(self, target_count: int) -> None:
         inbox = self.settings.memos.inbox_dir
         existing = list(inbox.glob("*.md"))
-        missing = self.settings.memos.daily_target - len(existing)
+        desired = min(self.settings.memos.daily_target, target_count)
+        missing = desired - len(existing)
         if missing <= 0:
             self.logger.info("Memo inventory sufficient: %s", len(existing))
             return

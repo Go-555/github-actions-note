@@ -6,6 +6,9 @@ on:
       dry_run:
         description: 'Set to 1 to run without external API calls'
         required: false
+      limit:
+        description: 'Override number of articles to generate'
+        required: false
   schedule:
     - cron: '0 15 * * *'  # JST 00:00
 
@@ -38,6 +41,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           IMAGE_API_KEY: ${{ secrets.IMAGE_API_KEY || secrets.GEMINI_API_KEY }}
           DRY_RUN: ${{ inputs.dry_run || '0' }}
+          BATCH_LIMIT: ${{ inputs.limit || '' }}
         run: |
           python scripts/batch_runner.py
 

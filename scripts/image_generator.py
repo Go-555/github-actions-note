@@ -19,18 +19,21 @@ class GeneratedImages:
 
 
 class ImageGenerator:
-    def __init__(self, settings: GeneratorSettings, api_key: str, dry_run: bool = False) -> None:
+    def __init__(self, settings: GeneratorSettings, api_key: str | None, dry_run: bool = False) -> None:
         self.settings = settings
         self.logger = setup_logger("images", settings.logs_dir)
         self.dry_run = dry_run
-        if not dry_run:
+        if not dry_run and api_key:
             genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel(model_name="imagen-3.0")
+            self.model = genai.GenerativeModel(
+                model_name="gemini-2.5-flash",
+                generation_config={"temperature": 0.4, "top_p": 0.8},
+            )
         else:
             self.model = None
 
     def generate(self, slug: str, briefs: Dict[str, any]) -> GeneratedImages:
-        if not self.settings.images.enabled or self.dry_run:
+        if not self.settings.images.enabled or self.dry_run or not self.model:
             return self._placeholder(slug)
         assets_dir = self.settings.assets_dir
         assets_dir.mkdir(parents=True, exist_ok=True)
@@ -46,12 +49,16 @@ class ImageGenerator:
         try:
             if not prompt:
                 raise ValueError("empty prompt")
-            result = self.model.generate_images(
-                prompt=prompt,
-                number_of_images=1,
-                size=f"{self.settings.images.width}x{self.settings.images.height}",
+            response = self.model.generate_content(
+                [
+                    {
+                        "text": prompt + " シンプルで視認性の高い図解をPNG形式で生成してください。",
+                    }
+                ],
+                generation_config={"response_mime_type": "image/png"},
             )
-            image_base64 = result.images[0].base64_data
+            part = response.candidates[0].content.parts[0]
+            image_base64 = part.inline_data.data  # type: ignore[attr-defined]
             data = base64.b64decode(image_base64)
             path.write_bytes(data)
             self.logger.info("Generated image %s", path.name)

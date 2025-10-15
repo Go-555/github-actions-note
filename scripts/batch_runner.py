@@ -44,11 +44,13 @@ def main() -> int:
         return 1
     image_key = os.environ.get("IMAGE_API_KEY", gemini_key)
 
+    limit_env = os.environ.get("BATCH_LIMIT", "").strip()
+    batch_limit = int(limit_env) if limit_env.isdigit() else config.concurrency.per_run_batch
     memo_researcher = MemoResearcher(config, gemini_key, dry_run=dry_run)
-    memo_researcher.ensure_inventory()
+    memo_researcher.ensure_inventory(batch_limit)
 
     task_loader = TaskLoader(config)
-    tasks = task_loader.load_tasks()
+    tasks = task_loader.load_tasks(batch_limit)
     if not tasks:
         logger.info("No tasks to process")
         return 0
@@ -64,7 +66,7 @@ def main() -> int:
 
     success = 0
     failure = 0
-    for task in tasks[: config.concurrency.per_run_batch]:
+    for task in tasks[:batch_limit]:
         log_payload: Dict[str, str] = {"keyword": task.keyword}
         try:
             reference_contents: List[str] = []

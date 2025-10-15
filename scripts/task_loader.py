@@ -28,7 +28,7 @@ class TaskLoader:
         self.settings = settings
         self.references = sorted((Path.cwd() / "inputs" / "research").glob('*'))
 
-    def load_tasks(self) -> List[GenerationTask]:
+    def load_tasks(self, limit: int) -> List[GenerationTask]:
         memos = self._list_memos()
         tasks: List[GenerationTask] = []
         for memo_path in memos:
@@ -42,7 +42,6 @@ class TaskLoader:
                     reference_paths=self.references,
                 )
             )
-        limit = self.settings.concurrency.per_run_batch
         return tasks[:limit]
 
     def _list_memos(self) -> List[Path]:
