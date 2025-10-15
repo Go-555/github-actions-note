@@ -5,9 +5,6 @@ from pathlib import Path
 from typing import Dict, List
 
 import yaml
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-
 from scripts.config_loader import GeneratorSettings
 from scripts.utils.logger import setup_logger
 
@@ -109,12 +106,27 @@ class QualityGate:
     def _validate_similarity(self, body: str, existing_texts: List[str]) -> bool:
         if not existing_texts:
             return True
-        vectorizer = TfidfVectorizer()
-        corpus = existing_texts + [body]
-        tfidf = vectorizer.fit_transform(corpus)
-        sims = cosine_similarity(tfidf[-1], tfidf[:-1]).flatten()
-        max_sim = sims.max() if sims.size else 0.0
+        sims = [self._cosine_similarity(body, other) for other in existing_texts]
+        max_sim = max(sims) if sims else 0.0
         if max_sim >= self.settings.dedupe.min_cosine_sim:
             self.logger.error("Similarity %.2f exceeds threshold", max_sim)
             return False
         return True
+
+    def _cosine_similarity(self, text_a: str, text_b: str) -> float:
+        tokens_a = self._tokenize(text_a)
+        tokens_b = self._tokenize(text_b)
+        if not tokens_a or not tokens_b:
+            return 0.0
+        vocab = set(tokens_a) | set(tokens_b)
+        vec_a = [tokens_a.count(token) for token in vocab]
+        vec_b = [tokens_b.count(token) for token in vocab]
+        dot = sum(a * b for a, b in zip(vec_a, vec_b))
+        norm_a = sum(a * a for a in vec_a) ** 0.5
+        norm_b = sum(b * b for b in vec_b) ** 0.5
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        return dot / (norm_a * norm_b)
+
+    def _tokenize(self, text: str) -> List[str]:
+        return [token for token in re.findall(r"[\w一-龥ぁ-んァ-ヴ]+", text.lower()) if token]
