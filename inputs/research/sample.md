@@ -1,0 +1,2 @@
+- GitHub Actions の成功事例: https://github.com/features/actions
+- note 自動化の活用事例: https://note.com/official/n/note-automation-case

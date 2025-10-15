@@ -2,3 +2,10 @@ node_modules/
 .DS_Store
 note-state.json
 /tmp/
+__pycache__/
+.venv/
+logs/
+*.log
+*.jsonl
+*.cache
+assets/placeholder.jpg

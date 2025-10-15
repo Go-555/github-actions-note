@@ -1,0 +1,55 @@
+# Generator configuration
+
+generator_version: "v1.0.0"
+locale: "ja-JP"
+article:
+  min_chars: 3000
+  max_chars: 5000
+  required_sections:
+    - "背景と課題"
+    - "結論（先出し）"
+    - "手順"
+    - "よくある失敗と対策"
+    - "事例・効果"
+    - "まとめ（CTA)"
+    - "参考リンク"
+  lead_min_chars: 100
+  lead_max_chars: 220
+images:
+  enabled: true
+  style: "clean-tech"
+  internal_count: 2
+  width: 1600
+  height: 900
+queue:
+  out_dir: "articles-queue"
+  posted_dir: "articles-posted"
+assets_dir: "assets"
+logs:
+  dir: "logs"
+concurrency:
+  daily_limit: 30
+  per_run_batch: 30
+  max_parallel: 3
+  jitter_sec:
+    - 60
+    - 420
+dedupe:
+  min_cosine_sim: 0.92
+defaults:
+  tags:
+    - "Automation"
+    - "AI"
+    - "note"
+  visibility: "public"
+  series: "自動化で回すメディア運用"
+retry:
+  max_attempts: 3
+  base_delay_sec: 20
+  max_delay_sec: 90
+quality_gate:
+  ng_words:
+    - "完全無料"
+    - "必ず成功"
+    - "絶対に稼げる"
+  max_link_errors: 0

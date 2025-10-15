@@ -1,0 +1,57 @@
+name: Generate Articles
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 15 * * *'  # JST 00:00
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run batch generator
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          IMAGE_API_KEY: ${{ secrets.IMAGE_API_KEY || secrets.GEMINI_API_KEY }}
+        run: |
+          python scripts/batch_runner.py
+
+      - name: Commit artifacts
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add articles-queue assets logs config
+          git commit -m "chore: batch generate $(date +'%Y-%m-%d')"
+          git push
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generation-logs
+          path: logs
+          if-no-files-found: ignore
