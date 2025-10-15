@@ -96,8 +96,8 @@ class MemoResearcher:
                     "response_mime_type": "application/json",
                 },
             )
-            text = response.text or "[]"
-            memos = json.loads(text)
+            text = self._extract_text(response)
+            memos = json.loads(text or "[]")
         except Exception:  # noqa: BLE001
             self.logger.warning("Memo generation fallback")
         if not isinstance(memos, list):
@@ -119,6 +119,20 @@ class MemoResearcher:
             }
             for i in range(count)
         ]
+
+    def _extract_text(self, response) -> str:
+        if getattr(response, "text", None):
+            return response.text
+        candidates = getattr(response, "candidates", [])
+        if not candidates:
+            return ""
+        parts = getattr(candidates[0].content, "parts", [])
+        texts = []
+        for part in parts:
+            value = getattr(part, "text", None)
+            if value:
+                texts.append(value)
+        return "".join(texts)
 
     def _write_memo(self, memo: dict) -> None:
         title = memo.get("title") or "生成AIトピック"
