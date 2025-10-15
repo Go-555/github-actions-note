@@ -26,7 +26,7 @@ class ImageGenerator:
         if not dry_run and api_key:
             genai.configure(api_key=api_key)
             self.model = genai.GenerativeModel(
-                model_name="gemini-2.5-flash",
+                model_name="models/gemini-2.5-flash",
                 generation_config={"temperature": 0.4, "top_p": 0.8},
             )
         else:
