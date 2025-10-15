@@ -22,7 +22,7 @@ class MemoResearcher:
         if not dry_run and api_key:
             genai.configure(api_key=api_key)
             self.model = genai.GenerativeModel(
-                model_name="gemini-1.5-pro-latest",
+                model_name="gemini-2.5-flash",
                 generation_config={"temperature": 0.8, "top_p": 0.9},
             )
         else:
