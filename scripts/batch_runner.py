@@ -56,7 +56,7 @@ def main() -> int:
     queue_writer = QueueWriter(config)
     quality_gate = QualityGate(config)
 
-    existing_texts = load_existing_texts(config.queue.out_dir, config.queue.posted_dir)
+    existing_texts = [] if dry_run else load_existing_texts(config.queue.out_dir, config.queue.posted_dir)
 
     success = 0
     failure = 0
@@ -88,13 +88,14 @@ def main() -> int:
                 keyword=task.keyword,
             )
             queue_writer.save(artifact.path, artifact.content, image_paths)
-            if not quality_gate.validate_article(artifact.path, existing_texts):
+            if not dry_run and not quality_gate.validate_article(artifact.path, existing_texts):
                 logger.error("Quality gate failed for %s", artifact.path)
                 artifact.path.unlink(missing_ok=True)
                 failure += 1
                 continue
             success += 1
-            existing_texts.append(artifact.content)
+            if not dry_run:
+                existing_texts.append(artifact.content)
             log_payload["status"] = "success"
             log_payload["path"] = str(artifact.path)
         except Exception as exc:  # noqa: BLE001
