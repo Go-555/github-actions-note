@@ -132,13 +132,15 @@ async function postToNote(params) {
         headless: true,
         args: ['--lang=ja-JP'],
     });
+    let context;
+    let page;
     try {
-        const context = await browser.newContext({
+        context = await browser.newContext({
             storageState: statePath,
             locale: 'ja-JP',
             permissions: ['clipboard-read', 'clipboard-write'],
         });
-        const page = await context.newPage();
+        page = await context.newPage();
         page.setDefaultTimeout(timeout);
         // クリップボード権限を明示的に付与
         await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'https://editor.note.com' });
@@ -459,8 +461,6 @@ async function postToNote(params) {
         await page.screenshot({ path: screenshotPath, fullPage: true });
         const finalUrl = page.url();
         log('Published', { url: finalUrl });
-        await context.close();
-        await browser.close();
         return {
             success: true,
             url: finalUrl,
@@ -469,8 +469,28 @@ async function postToNote(params) {
         };
     }
     catch (error) {
-        await browser.close();
+        if (page) {
+            try {
+                const errorShot = screenshotPath.replace(/\.png$/, '-error.png');
+                await page.screenshot({ path: errorShot, fullPage: true });
+                log('Captured error screenshot', { path: errorShot });
+            }
+            catch (screenshotError) {
+                log('Failed to capture error screenshot', screenshotError);
+            }
+            try {
+                const htmlSnippet = await page.evaluate(() => document.body.innerHTML.slice(0, 2000));
+                log('Captured body snippet', { snippet: htmlSnippet });
+            }
+            catch (htmlError) {
+                log('Failed to capture body snippet', htmlError);
+            }
+        }
         throw error;
+    }
+    finally {
+        await context?.close().catch(() => { });
+        await browser.close().catch(() => { });
     }
 }
 // Zodスキーマ定義

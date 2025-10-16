@@ -7,7 +7,7 @@ import {
   ListToolsRequestSchema,
   Tool,
 } from '@modelcontextprotocol/sdk/types.js';
-import { chromium } from 'playwright';
+import { chromium, type BrowserContext, type Page } from 'playwright';
 import { z } from 'zod';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -187,13 +187,16 @@ async function postToNote(params: {
     args: ['--lang=ja-JP'],
   });
 
+  let context: BrowserContext | undefined;
+  let page: Page | undefined;
+
   try {
-    const context = await browser.newContext({
+    context = await browser.newContext({
       storageState: statePath,
       locale: 'ja-JP',
       permissions: ['clipboard-read', 'clipboard-write'],
     });
-    const page = await context.newPage();
+    page = await context.newPage();
     page.setDefaultTimeout(timeout);
     
     // クリップボード権限を明示的に付与
@@ -576,9 +579,6 @@ async function postToNote(params: {
     const finalUrl = page.url();
     log('Published', { url: finalUrl });
 
-    await context.close();
-    await browser.close();
-
     return {
       success: true,
       url: finalUrl,
@@ -586,8 +586,25 @@ async function postToNote(params: {
       message: '記事を公開しました',
     };
   } catch (error) {
-    await browser.close();
+    if (page) {
+      try {
+        const errorShot = screenshotPath.replace(/\.png$/, '-error.png');
+        await page.screenshot({ path: errorShot, fullPage: true });
+        log('Captured error screenshot', { path: errorShot });
+      } catch (screenshotError) {
+        log('Failed to capture error screenshot', screenshotError);
+      }
+      try {
+        const htmlSnippet = await page.evaluate(() => document.body.innerHTML.slice(0, 2000));
+        log('Captured body snippet', { snippet: htmlSnippet });
+      } catch (htmlError) {
+        log('Failed to capture body snippet', htmlError);
+      }
+    }
     throw error;
+  } finally {
+    await context?.close().catch(() => {});
+    await browser.close().catch(() => {});
   }
 }
 
