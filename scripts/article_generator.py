@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import re
 from dataclasses import dataclass
 from typing import List
 
@@ -15,6 +17,12 @@ class GeneratedArticle:
     sections: List[str]
     references: List[str]
     body_markdown: str
+
+
+@dataclass
+class SectionBlock:
+    heading: str
+    paragraphs: List[str]
 
 
 class ArticleGenerator:
@@ -41,13 +49,14 @@ class ArticleGenerator:
             text = self._dummy_body(keyword, plan)
         else:
             response = self.model.generate_content([prompt])
-            text = response.text
+            text = self._extract_text(response)
         self.logger.info("Generated article body for '%s'", keyword)
+        body = self._enforce_length(text)
         return GeneratedArticle(
             lead="",
             sections=self.settings.article.required_sections,
             references=[],
-            body_markdown=text,
+            body_markdown=body,
         )
 
     def _build_prompt(self, keyword: str, memo: str, plan: dict) -> str:
@@ -58,7 +67,7 @@ class ArticleGenerator:
             f"構成案:\n{sections}\n"
             f"メモ:\n{memo or 'なし'}\n"
             "以下の制約を守ってMarkdown本文を書いてください。\n"
-            "- 文字数はおよそ 3,000～5,000 字\n"
+            "- 全体の文字数は 3,000〜5,000 字に収める\n"
             "- リード文（100～200字）を先頭に書く\n"
             "- 背景と課題, 結論（先出し）, 手順, よくある失敗と対策, 事例・効果, まとめ（CTA), 参考リンク の順に H2 見出しを配置する\n"
             "- 必要に応じて H3/H4 を使い、読者に実務で役立つ洞察を提供する\n"
@@ -84,3 +93,219 @@ class ArticleGenerator:
         lines.append("## 参考リンク")
         lines.append("- https://example.com")
         return "\n".join(lines)
+
+    def _extract_text(self, response) -> str:
+        if getattr(response, "text", None):
+            return response.text
+        candidates = getattr(response, "candidates", [])
+        if not candidates:
+            return ""
+        parts = getattr(candidates[0].content, "parts", [])
+        texts: List[str] = []
+        for part in parts:
+            value = getattr(part, "text", None)
+            if value:
+                texts.append(value)
+                continue
+            inline = getattr(part, "inline_data", None)
+            if inline and getattr(inline, "data", None):
+                try:
+                    texts.append(base64.b64decode(inline.data).decode("utf-8"))
+                    continue
+                except Exception:  # noqa: BLE001
+                    pass
+            as_dict = getattr(part, "as_dict", None)
+            if callable(as_dict):
+                try:
+                    dict_value = as_dict()
+                    if isinstance(dict_value, dict):
+                        text_value = dict_value.get("text")
+                        if text_value:
+                            texts.append(text_value)
+                except Exception:  # noqa: BLE001
+                    continue
+        return "".join(texts)
+
+    def _enforce_length(self, text: str) -> str:
+        min_len = self.settings.article.min_chars
+        max_len = self.settings.article.max_chars
+        body = text.strip()
+        if not body:
+            return body
+        if len(body) <= max_len:
+            if len(body) < min_len:
+                self.logger.warning("Generated body shorter than minimum: %s chars", len(body))
+            return body
+
+        preface, sections = self._split_into_units(body)
+        if not sections:
+            trimmed = self._trim_paragraph_to(body, max_len)
+            if len(trimmed) < min_len:
+                self.logger.warning("Body length after trimming (%s) below minimum %s", len(trimmed), min_len)
+            return trimmed
+
+        current = self._compose_from_units(preface, sections)
+
+        while len(current) > max_len:
+            removed = False
+            for section in reversed(sections):
+                if len(section.paragraphs) <= 1:
+                    continue
+                removed_para = section.paragraphs.pop()
+                candidate = self._compose_from_units(preface, sections)
+                if len(candidate) >= min_len:
+                    current = candidate
+                    removed = True
+                    break
+                section.paragraphs.append(removed_para)
+            if not removed and len(preface) > 1:
+                removed_preface = preface.pop()
+                candidate = self._compose_from_units(preface, sections)
+                if len(candidate) >= min_len:
+                    current = candidate
+                    removed = True
+                else:
+                    preface.append(removed_preface)
+            if not removed:
+                break
+
+        guard = 0
+        while len(current) > max_len and guard < 50:
+            guard += 1
+            trimmed = False
+            for section in reversed(sections):
+                if not section.paragraphs:
+                    continue
+                paragraph = section.paragraphs[-1]
+                other_length = len(current) - len(paragraph)
+                allowed = max_len - other_length
+                if allowed <= 0:
+                    continue
+                new_paragraph = self._trim_paragraph_to(paragraph, allowed)
+                if new_paragraph == paragraph:
+                    continue
+                section.paragraphs[-1] = new_paragraph
+                current = self._compose_from_units(preface, sections)
+                trimmed = True
+                break
+            if trimmed:
+                continue
+            if preface:
+                paragraph = preface[-1]
+                other_length = len(current) - len(paragraph)
+                allowed = max_len - other_length
+                if allowed > 0:
+                    new_paragraph = self._trim_paragraph_to(paragraph, allowed)
+                    if new_paragraph != paragraph:
+                        preface[-1] = new_paragraph
+                        current = self._compose_from_units(preface, sections)
+                        continue
+            break
+
+        if len(current) > max_len:
+            fallback = current[:max_len]
+            cutoff = fallback.rfind("\n\n")
+            if cutoff >= min_len:
+                current = fallback[:cutoff].rstrip()
+            else:
+                current = fallback.rstrip()
+            self.logger.warning("Fallback trimming applied; final length %s chars", len(current))
+
+        if len(current) < min_len:
+            self.logger.warning("Body length after trimming (%s) below minimum %s", len(current), min_len)
+
+        return current
+
+    def _split_into_units(self, text: str) -> tuple[List[str], List[SectionBlock]]:
+        paragraphs = [p for p in text.strip().split("\n\n") if p.strip()]
+        preface: List[str] = []
+        sections: List[SectionBlock] = []
+        current_section: SectionBlock | None = None
+        for paragraph in paragraphs:
+            if paragraph.startswith("## "):
+                current_section = SectionBlock(heading=paragraph.strip(), paragraphs=[])
+                sections.append(current_section)
+                continue
+            if current_section is None:
+                preface.append(paragraph.strip())
+                continue
+            current_section.paragraphs.append(paragraph.strip())
+        return preface, sections
+
+    def _compose_from_units(self, preface: List[str], sections: List[SectionBlock]) -> str:
+        parts: List[str] = []
+        parts.extend(preface)
+        for section in sections:
+            parts.append(section.heading)
+            parts.extend(section.paragraphs)
+        return "\n\n".join(parts).strip()
+
+    def _trim_paragraph_to(self, paragraph: str, allowed: int) -> str:
+        text = paragraph.strip()
+        if not text:
+            return text
+        if allowed <= 0:
+            return ""
+        if len(text) <= allowed:
+            return text
+        if self._is_bullet_block(text):
+            lines = [line for line in text.splitlines() if line.strip()]
+            trimmed_lines: List[str] = []
+            total = 0
+            for line in lines:
+                trimmed_lines.append(line)
+                total += len(line)
+                if total >= allowed:
+                    break
+            return "\n".join(trimmed_lines).strip()
+        sentences = self._split_sentences(text)
+        if not sentences:
+            return self._truncate_text(text, allowed)
+        trimmed_sentences: List[str] = []
+        total = 0
+        for idx, sentence in enumerate(sentences):
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+            trimmed_sentences.append(sentence)
+            total += len(sentence)
+            if total >= allowed and idx != 0:
+                break
+        candidate = "".join(trimmed_sentences).strip()
+        if not candidate:
+            candidate = sentences[0].strip()
+        if len(candidate) > allowed:
+            candidate = self._truncate_text(candidate, allowed)
+        return candidate
+
+    def _split_sentences(self, text: str) -> List[str]:
+        sentences = re.split(r"(?<=[。．？！!?])\s+", text)
+        return [sentence for sentence in sentences if sentence.strip()]
+
+    def _is_bullet_block(self, text: str) -> bool:
+        lines = [line for line in text.splitlines() if line.strip()]
+        if not lines:
+            return False
+        for line in lines:
+            stripped = line.lstrip()
+            if stripped.startswith(('-', '*', '+', '・')):
+                continue
+            if re.match(r"\d+\.\s", stripped):
+                continue
+            return False
+        return True
+
+    def _truncate_text(self, text: str, limit: int) -> str:
+        if limit <= 0:
+            return ""
+        if len(text) <= limit:
+            return text
+        truncated = text[:limit]
+        for punct in ("。", "．", "！", "？", "!", "?"):
+            idx = truncated.rfind(punct)
+            if idx != -1 and idx >= limit // 2:
+                return truncated[: idx + 1]
+        comma_idx = truncated.rfind("、")
+        if comma_idx != -1 and comma_idx >= limit // 2:
+            return truncated[:comma_idx].rstrip("、")
+        return truncated.rstrip()

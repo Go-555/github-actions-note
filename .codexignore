@@ -1,0 +1,11 @@
+node_modules/
+logs/
+articles-posted/
+articles-queue/
+assets/
+inputs/
+sources/
+tools/
+.DS_Store
+*.log
+*.jsonl
