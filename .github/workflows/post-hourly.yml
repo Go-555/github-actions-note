@@ -101,7 +101,7 @@ jobs:
           git push
 
       - name: Upload screenshots
-        if: steps.select.outputs.path != ''
+        if: always() && steps.select.outputs.path != ''
         uses: actions/upload-artifact@v4
         with:
           name: note-screens
