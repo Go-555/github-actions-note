@@ -3,9 +3,9 @@ title: 生成AIリサーチ 11の最新動向
 uuid: 072738ef-1750-4248-8319-194a2c7dd8e3
 summary: 生成AIリサーチ 11 をテーマにした自動生成テストサマリー
 tags:
-- Automation
-- AI
-- note
+  - Automation
+  - AI
+  - note
 thumbnail: ./assets/sheng-cheng-airisati-11nozui-xin-dong-xiang-thumb.jpg
 hero_image: ./assets/sheng-cheng-airisati-11nozui-xin-dong-xiang-hero.jpg
 publish_at: '2025-10-17T21:05:00+09:00'
@@ -16,8 +16,9 @@ notes:
   source_cluster: 生成AIリサーチ 11
   generator_version: v1.0.0
 internal_images:
-- ./assets/sheng-cheng-airisati-11nozui-xin-dong-xiang-internal1.jpg
-- ./assets/sheng-cheng-airisati-11nozui-xin-dong-xiang-internal2.jpg
+  - ./assets/sheng-cheng-airisati-11nozui-xin-dong-xiang-internal1.jpg
+  - ./assets/sheng-cheng-airisati-11nozui-xin-dong-xiang-internal2.jpg
+posted_at: '2025-10-16T16:22:17.862Z'
 ---
 # 生成AIリサーチ 11 の最新戦略
 
