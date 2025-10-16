@@ -98,6 +98,7 @@ rl.on('line', (line) => {
   if (msg.id === 'call1' && (msg.result || msg.error)) {
     finished = true;
     if (msg.error) {
+      lastResult = { error: msg.error };
       console.error('MCP error:', JSON.stringify(msg.error, null, 2));
       exitCode = 1;
     } else {
@@ -105,10 +106,10 @@ rl.on('line', (line) => {
       lastResult = result;
       console.log('=== RESULT ===');
       console.log(JSON.stringify(result, null, 2));
-      const ok =
-        result.success === true ||
-        result.isError === false ||
-        /published|success/i.test(JSON.stringify(result));
+      const ok = isSuccessful(result);
+      if (!ok) {
+        console.error('note-post result indicates failure');
+      }
       exitCode = ok ? 0 : 1;
     }
     try {
@@ -139,7 +140,7 @@ child.on('close', async (code) => {
   if (!finished) {
     console.error('tools/call の結果を受け取れませんでした (code=' + code + ')');
   }
-  if (exitCode === 0 && resultPath && lastResult) {
+  if (resultPath && lastResult) {
     try {
       await writeFile(resultPath, JSON.stringify(lastResult, null, 2), 'utf8');
       console.log(`Result written to ${resultPath}`);
@@ -163,3 +164,34 @@ send({
     }
   }
 });
+
+function isSuccessful(result) {
+  if (!result || typeof result !== 'object') {
+    return false;
+  }
+  if (result.isError === true) {
+    return false;
+  }
+  if (typeof result.success === 'boolean') {
+    return result.success;
+  }
+  const texts = [];
+  if (Array.isArray(result.content)) {
+    for (const item of result.content) {
+      if (item && typeof item === 'object' && typeof item.text === 'string') {
+        texts.push(item.text);
+      }
+    }
+  }
+  for (const text of texts) {
+    try {
+      const parsed = JSON.parse(text);
+      if (typeof parsed.success === 'boolean') {
+        return parsed.success;
+      }
+    } catch {
+      // ignore plain text fragments
+    }
+  }
+  return false;
+}
