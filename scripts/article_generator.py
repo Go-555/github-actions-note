@@ -170,18 +170,24 @@ class ArticleGenerator:
                 break
 
         guard = 0
-        while len(current) > max_len and guard < 50:
+        while len(current) > max_len and guard < 100:
             guard += 1
             trimmed = False
+            excess = len(current) - max_len
+            section_min = self._section_min_length()
             for section in reversed(sections):
                 if not section.paragraphs:
                     continue
                 paragraph = section.paragraphs[-1]
-                other_length = len(current) - len(paragraph)
-                allowed = max_len - other_length
-                if allowed <= 0:
+                paragraph_len = len(paragraph)
+                reduce_cap = max(paragraph_len - section_min, 0)
+                if reduce_cap <= 0:
                     continue
-                new_paragraph = self._trim_paragraph_to(paragraph, allowed)
+                reduce_by = min(excess, reduce_cap)
+                target_len = max(paragraph_len - reduce_by, section_min)
+                if target_len >= paragraph_len:
+                    continue
+                new_paragraph = self._trim_paragraph_to(paragraph, target_len)
                 if new_paragraph == paragraph:
                     continue
                 section.paragraphs[-1] = new_paragraph
@@ -192,14 +198,18 @@ class ArticleGenerator:
                 continue
             if preface:
                 paragraph = preface[-1]
-                other_length = len(current) - len(paragraph)
-                allowed = max_len - other_length
-                if allowed > 0:
-                    new_paragraph = self._trim_paragraph_to(paragraph, allowed)
-                    if new_paragraph != paragraph:
-                        preface[-1] = new_paragraph
-                        current = self._compose_from_units(preface, sections)
-                        continue
+                paragraph_len = len(paragraph)
+                lead_min = self._lead_min_length()
+                reduce_cap = max(paragraph_len - lead_min, 0)
+                if reduce_cap > 0:
+                    reduce_by = min(len(current) - max_len, reduce_cap)
+                    target_len = max(paragraph_len - reduce_by, lead_min)
+                    if target_len < paragraph_len:
+                        new_paragraph = self._trim_paragraph_to(paragraph, target_len)
+                        if new_paragraph != paragraph:
+                            preface[-1] = new_paragraph
+                            current = self._compose_from_units(preface, sections)
+                            continue
             break
 
         if len(current) > max_len:
@@ -256,27 +266,33 @@ class ArticleGenerator:
             parts.extend(section.paragraphs)
         return "\n\n".join(parts).strip()
 
-    def _trim_paragraph_to(self, paragraph: str, allowed: int) -> str:
+    def _trim_paragraph_to(self, paragraph: str, target_len: int) -> str:
         text = paragraph.strip()
         if not text:
             return text
-        if allowed <= 0:
+        if target_len <= 0:
             return ""
-        if len(text) <= allowed:
+        if len(text) <= target_len:
             return text
         if self._is_bullet_block(text):
-            lines = [line for line in text.splitlines() if line.strip()]
             trimmed_lines: List[str] = []
             total = 0
-            for line in lines:
+            for line in text.splitlines():
+                if not line.strip():
+                    if trimmed_lines:
+                        trimmed_lines.append(line)
+                    continue
+                line_len = len(line)
+                if trimmed_lines and total + line_len > target_len:
+                    break
                 trimmed_lines.append(line)
-                total += len(line)
-                if total >= allowed:
+                total += line_len
+                if total >= target_len:
                     break
             return "\n".join(trimmed_lines).strip()
         sentences = self._split_sentences(text)
         if not sentences:
-            return self._truncate_text(text, allowed)
+            return self._truncate_text(text, target_len)
         trimmed_sentences: List[str] = []
         total = 0
         for idx, sentence in enumerate(sentences):
@@ -285,13 +301,13 @@ class ArticleGenerator:
                 continue
             trimmed_sentences.append(sentence)
             total += len(sentence)
-            if total >= allowed and idx != 0:
+            if total >= target_len and idx != 0:
                 break
         candidate = "".join(trimmed_sentences).strip()
         if not candidate:
             candidate = sentences[0].strip()
-        if len(candidate) > allowed:
-            candidate = self._truncate_text(candidate, allowed)
+        if len(candidate) > target_len:
+            candidate = self._truncate_text(candidate, target_len)
         return candidate
 
     def _split_sentences(self, text: str) -> List[str]:
@@ -325,3 +341,11 @@ class ArticleGenerator:
         if comma_idx != -1 and comma_idx >= limit // 2:
             return truncated[:comma_idx].rstrip("、")
         return truncated.rstrip()
+
+    def _section_min_length(self) -> int:
+        section_count = max(len(self.settings.article.required_sections), 1)
+        calculated = self.settings.article.min_chars // (section_count * 2)
+        return max(180, calculated)
+
+    def _lead_min_length(self) -> int:
+        return max(self.settings.article.lead_min_chars, 80)
