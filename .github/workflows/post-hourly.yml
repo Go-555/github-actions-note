@@ -29,8 +29,8 @@ jobs:
 
       - name: Install Playwright browsers
         run: |
-          npx playwright install --with-deps chromium-headless-shell
-          npx playwright install chromium-headless-shell
+          npx playwright@1.55.1 install --with-deps chromium-headless-shell
+          npx playwright@1.55.1 install chromium-headless-shell
 
       - name: Select article from queue
         id: select
