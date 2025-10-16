@@ -245,12 +245,16 @@ class ArticleGenerator:
                 current_section.paragraphs.append(paragraph)
 
         for line in lines:
-            if line.startswith("## "):
+            stripped = line.lstrip()
+            if stripped.startswith("##") and not stripped.startswith("###"):
                 flush_buffer()
-                current_section = SectionBlock(heading=line.strip(), paragraphs=[])
+                heading_body = stripped[2:].lstrip()
+                heading_text = f"## {heading_body}" if heading_body else "##"
+                current_section = SectionBlock(heading=heading_text, paragraphs=[])
                 sections.append(current_section)
+                buffer = []
                 continue
-            if line.strip() == "":
+            if stripped == "":
                 flush_buffer()
                 continue
             buffer.append(line)
