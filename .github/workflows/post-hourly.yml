@@ -75,13 +75,23 @@ jobs:
       - name: Commit queue updates
         if: steps.select.outputs.path != ''
         run: |
+          set -euo pipefail
           if git diff --quiet; then
             echo "No changes to commit."
             exit 0
           fi
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git add articles-queue articles-posted assets logs || true
+          paths=("articles-queue" "articles-posted" "assets" "logs")
+          for path in "${paths[@]}"; do
+            if [ -e "$path" ]; then
+              git add "$path"
+            fi
+          done
+          if git diff --cached --quiet; then
+            echo "Nothing staged after filtering paths; skipping commit."
+            exit 0
+          fi
           git commit -m "chore: post queued article"
           git push
 
