@@ -137,6 +137,13 @@ class ArticleGenerator:
                 self.logger.warning("Generated body shorter than minimum: %s chars", len(body))
             return body
 
+        missing_before = [section for section in self.settings.article.required_sections if section not in body]
+        if missing_before:
+            self.logger.warning(
+                "Generated body missing sections prior to trimming: %s",
+                ", ".join(missing_before),
+            )
+
         preface, sections = self._split_into_units(body)
         if not sections:
             trimmed = self._trim_paragraph_to(body, max_len)
@@ -348,8 +355,8 @@ class ArticleGenerator:
 
     def _section_min_length(self) -> int:
         section_count = max(len(self.settings.article.required_sections), 1)
-        calculated = self.settings.article.min_chars // (section_count * 2)
-        return max(180, calculated)
+        calculated = self.settings.article.min_chars // (section_count * 3)
+        return max(120, calculated)
 
     def _lead_min_length(self) -> int:
         return max(self.settings.article.lead_min_chars, 80)
