@@ -13,6 +13,6 @@
   "type": "commonjs",
   "dependencies": {
     "gray-matter": "^4.0.3",
-    "playwright": "^1.55.1"
+    "playwright": "^1.49.0"
   }
 }
