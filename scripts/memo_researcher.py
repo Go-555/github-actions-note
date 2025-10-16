@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 from datetime import datetime
@@ -132,6 +133,22 @@ class MemoResearcher:
             value = getattr(part, "text", None)
             if value:
                 texts.append(value)
+                continue
+            inline = getattr(part, "inline_data", None)
+            if inline and getattr(inline, "data", None):
+                try:
+                    texts.append(base64.b64decode(inline.data).decode("utf-8"))
+                    continue
+                except Exception:  # noqa: BLE001
+                    pass
+            as_dict = getattr(part, "as_dict", None)
+            if callable(as_dict):
+                try:
+                    dict_value = as_dict()
+                    if isinstance(dict_value, dict) and "text" in dict_value:
+                        texts.append(dict_value["text"])
+                except Exception:  # noqa: BLE001
+                    continue
         return "".join(texts)
 
     def _write_memo(self, memo: dict) -> None:
