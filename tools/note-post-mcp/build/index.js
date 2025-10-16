@@ -134,11 +134,24 @@ async function postToNote(params) {
     });
     let context;
     let page;
+    const userAgent = process.env.NOTE_POST_MCP_USER_AGENT ??
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36';
     try {
         context = await browser.newContext({
             storageState: statePath,
             locale: 'ja-JP',
             permissions: ['clipboard-read', 'clipboard-write'],
+            userAgent,
+        });
+        await context.addInitScript(() => {
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined,
+            });
+            const anyWindow = window;
+            anyWindow.chrome ??= { runtime: {} };
+            Object.defineProperty(navigator, 'platform', {
+                get: () => (navigator.userAgent.includes('Mac') ? 'MacIntel' : navigator.platform),
+            });
         });
         page = await context.newPage();
         page.on('response', (response) => {
