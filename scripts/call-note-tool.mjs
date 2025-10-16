@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import readline from 'node:readline';
 
 const [, , toolName, markdownPath] = process.argv;
@@ -23,12 +24,13 @@ if (!existsSync(statePath)) {
   process.exit(1);
 }
 
-const child = spawn('npx', ['--yes', '@gonuts555/note-post-mcp@latest', '--stdio'], {
-  stdio: ['pipe', 'pipe', 'pipe'],
-  env: {
-    ...process.env,
-    DEBUG: process.env.DEBUG || 'note-post-mcp:*'
-  }
+const notePostBin = path.resolve('tools/note-post-mcp/build/index.js');
+const child = spawn(process.execPath, [notePostBin], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: {
+        ...process.env,
+        DEBUG: process.env.DEBUG || 'note-post-mcp:*'
+    }
 });
 
 let initialized = false;
