@@ -197,6 +197,14 @@ async function postToNote(params: {
       permissions: ['clipboard-read', 'clipboard-write'],
     });
     page = await context.newPage();
+    page.on('response', (response) => {
+      if (response.status() >= 400) {
+        log('HTTP error response', {
+          url: response.url(),
+          status: response.status(),
+        });
+      }
+    });
     page.setDefaultTimeout(timeout);
     
     // クリップボード権限を明示的に付与
@@ -204,7 +212,11 @@ async function postToNote(params: {
 
     // 新規記事作成ページに移動
     const startUrl = 'https://editor.note.com/new';
-    await page.goto(startUrl, { waitUntil: 'domcontentloaded', timeout });
+    await page.goto(startUrl, { waitUntil: 'networkidle', timeout }).catch(async (err) => {
+      log('Initial navigation failed', { error: err instanceof Error ? err.message : String(err) });
+      throw err;
+    });
+    log('Navigated to editor', { url: page.url() });
     const titleSelector = 'textarea[placeholder*="記事タイトル"]';
     await page.waitForSelector(titleSelector, { timeout });
 
