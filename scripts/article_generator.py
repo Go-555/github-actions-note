@@ -217,19 +217,35 @@ class ArticleGenerator:
         return current
 
     def _split_into_units(self, text: str) -> tuple[List[str], List[SectionBlock]]:
-        paragraphs = [p for p in text.strip().split("\n\n") if p.strip()]
+        lines = text.strip().splitlines()
         preface: List[str] = []
         sections: List[SectionBlock] = []
         current_section: SectionBlock | None = None
-        for paragraph in paragraphs:
-            if paragraph.startswith("## "):
-                current_section = SectionBlock(heading=paragraph.strip(), paragraphs=[])
+        buffer: List[str] = []
+
+        def flush_buffer() -> None:
+            nonlocal buffer, current_section
+            paragraph = "\n".join(buffer).strip()
+            buffer = []
+            if not paragraph:
+                return
+            if current_section is None:
+                preface.append(paragraph)
+            else:
+                current_section.paragraphs.append(paragraph)
+
+        for line in lines:
+            if line.startswith("## "):
+                flush_buffer()
+                current_section = SectionBlock(heading=line.strip(), paragraphs=[])
                 sections.append(current_section)
                 continue
-            if current_section is None:
-                preface.append(paragraph.strip())
+            if line.strip() == "":
+                flush_buffer()
                 continue
-            current_section.paragraphs.append(paragraph.strip())
+            buffer.append(line)
+
+        flush_buffer()
         return preface, sections
 
     def _compose_from_units(self, preface: List[str], sections: List[SectionBlock]) -> str:
