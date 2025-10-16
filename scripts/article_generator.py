@@ -50,6 +50,7 @@ class ArticleGenerator:
         else:
             response = self.model.generate_content([prompt])
             text = self._extract_text(response)
+        text = self._ensure_sections_present(text, keyword, plan)
         self.logger.info("Generated article body for '%s'", keyword)
         body = self._enforce_length(text)
         return GeneratedArticle(
@@ -233,6 +234,25 @@ class ArticleGenerator:
 
         return current
 
+    def _ensure_sections_present(self, text: str, keyword: str, plan: dict) -> str:
+        missing = [section for section in self.settings.article.required_sections if section not in text]
+        if not missing:
+            return text
+        fallback_body = self._dummy_body(keyword, plan)
+        _, fallback_sections = self._split_into_units(fallback_body)
+        fallback_map = {
+            self._normalize_heading(section.heading): "\n\n".join(section.paragraphs)
+            for section in fallback_sections
+        }
+        self.logger.warning("Supplementing missing sections with fallback content: %s", ", ".join(missing))
+        patched = text.rstrip()
+        for section in missing:
+            content = fallback_map.get(section)
+            if not content:
+                content = self._default_section_placeholder(section)
+            patched = f"{patched}\n\n## {section}\n{content.strip()}"
+        return patched
+
     def _split_into_units(self, text: str) -> tuple[List[str], List[SectionBlock]]:
         lines = text.strip().splitlines()
         preface: List[str] = []
@@ -360,3 +380,13 @@ class ArticleGenerator:
 
     def _lead_min_length(self) -> int:
         return max(self.settings.article.lead_min_chars, 80)
+
+    def _normalize_heading(self, heading: str) -> str:
+        without_hash = heading.lstrip("#").strip()
+        return without_hash
+
+    def _default_section_placeholder(self, section: str) -> str:
+        return (
+            f"{section} セクションは生成結果から十分な情報が得られなかったため、"
+            "テンプレートの補完テキストを追加しています。実際の運用時には改めて見直してください。"
+        )
