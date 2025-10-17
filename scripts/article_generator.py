@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import re
 import unicodedata
+from datetime import datetime
 from dataclasses import dataclass
 from typing import List
 
@@ -10,6 +11,7 @@ import google.generativeai as genai
 
 from scripts.config_loader import GeneratorSettings
 from scripts.utils.logger import setup_logger
+from scripts.utils.text import generate_slug
 
 
 @dataclass
@@ -265,6 +267,16 @@ class ArticleGenerator:
             self.logger.error("Model output missing required sections: %s", ", ".join(missing))
             preview = (text or "").strip().replace("\n", "\\n")
             self.logger.error("Body preview snippet: %s", preview[:1000])
+            try:
+                debug_dir = self.settings.logs_dir / "debug"
+                debug_dir.mkdir(parents=True, exist_ok=True)
+                timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+                slug = generate_slug(keyword or "article")
+                debug_path = debug_dir / f"{slug}-{timestamp}.md"
+                debug_path.write_text(text or "", encoding="utf-8")
+                self.logger.error("Saved failing body to %s", debug_path)
+            except Exception:  # noqa: BLE001
+                self.logger.exception("Failed to persist debug article body")
             raise ValueError(f"Missing required sections: {', '.join(missing)}")
         if self.settings.quality_gate.reject_phrases:
             for phrase in self.settings.quality_gate.reject_phrases:
