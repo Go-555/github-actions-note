@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+import unicodedata
 from typing import Dict, List
 
 import yaml
@@ -67,22 +68,38 @@ class QualityGate:
         return True
 
     def _validate_sections(self, body: str) -> bool:
+        normalized_body = unicodedata.normalize("NFKC", body or "")
         for section in self.settings.article.required_sections:
-            if section not in body:
-                self.logger.error("Missing section: %s", section)
-                return False
+            normalized_section = unicodedata.normalize("NFKC", section)
+            if normalized_section in normalized_body:
+                continue
+            heading_variant = unicodedata.normalize("NFKC", f"## {section}")
+            if heading_variant in normalized_body:
+                continue
+            self.logger.error("Missing section: %s", section)
+            return False
         return True
 
     def _validate_ng_words(self, body: str) -> bool:
+        normalized_body = unicodedata.normalize("NFKC", body or "")
         for word in self.settings.quality_gate.ng_words:
             if word in body:
+                self.logger.error("Contains NG word: %s", word)
+                return False
+            normalized_word = unicodedata.normalize("NFKC", word)
+            if normalized_word and normalized_word in normalized_body:
                 self.logger.error("Contains NG word: %s", word)
                 return False
         return True
 
     def _validate_reject_phrases(self, body: str) -> bool:
+        normalized_body = unicodedata.normalize("NFKC", body or "")
         for phrase in self.settings.quality_gate.reject_phrases:
             if phrase and phrase in body:
+                self.logger.error("Contains rejected phrase: %s", phrase)
+                return False
+            normalized_phrase = unicodedata.normalize("NFKC", phrase)
+            if normalized_phrase and normalized_phrase in normalized_body:
                 self.logger.error("Contains rejected phrase: %s", phrase)
                 return False
         return True
