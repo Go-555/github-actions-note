@@ -48,7 +48,7 @@ jobs:
 
       - name: Commit artifacts
         run: |
-          if git diff --quiet; then
+          if [ -z "$(git status --short)" ]; then
             echo "No changes to commit."
             exit 0
           fi
