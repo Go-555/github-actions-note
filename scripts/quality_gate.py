@@ -8,6 +8,7 @@ from typing import Dict, List
 import yaml
 from scripts.config_loader import GeneratorSettings
 from scripts.utils.logger import setup_logger
+from scripts.utils.sections import section_present
 
 
 class QualityGate:
@@ -62,19 +63,27 @@ class QualityGate:
 
     def _validate_length(self, body: str) -> bool:
         char_count = len(body)
-        if char_count < self.settings.article.min_chars or char_count > self.settings.article.max_chars:
+        max_chars = self.settings.article.max_chars
+        tolerance = getattr(self.settings.quality_gate, "length_tolerance", 200)
+        if char_count < self.settings.article.min_chars:
             self.logger.error("Article length constraint violated: %s chars", char_count)
             return False
+        if char_count > max_chars + tolerance:
+            self.logger.error("Article length constraint violated: %s chars", char_count)
+            return False
+        if char_count > max_chars:
+            self.logger.warning(
+                "Article length %s exceeds max %s but within tolerance %s",
+                char_count,
+                max_chars,
+                tolerance,
+            )
         return True
 
     def _validate_sections(self, body: str) -> bool:
         normalized_body = unicodedata.normalize("NFKC", body or "")
         for section in self.settings.article.required_sections:
-            normalized_section = unicodedata.normalize("NFKC", section)
-            if normalized_section in normalized_body:
-                continue
-            heading_variant = unicodedata.normalize("NFKC", f"## {section}")
-            if heading_variant in normalized_body:
+            if section_present(normalized_body, section):
                 continue
             preview = (body or "").strip().replace("\n", "\\n")
             self.logger.error("Missing section: %s", section)

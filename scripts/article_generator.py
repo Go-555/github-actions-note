@@ -11,6 +11,8 @@ import google.generativeai as genai
 
 from scripts.config_loader import GeneratorSettings
 from scripts.utils.logger import setup_logger
+from scripts.utils.sections import (SECTION_ALIASES, find_best_match,
+                                    iter_section_variants, section_present)
 from scripts.utils.text import generate_slug
 
 
@@ -29,15 +31,6 @@ class SectionBlock:
 
 
 class ArticleGenerator:
-    SECTION_KEYWORDS = {
-        "背景と課題": ["背景", "課題"],
-        "結論（先出し）": ["結論", "先"],
-        "手順": ["手順", "ステップ"],
-        "よくある失敗と対策": ["失敗", "対策"],
-        "事例・効果": ["事例", "効果"],
-        "まとめ（CTA)": ["まとめ"],
-        "参考リンク": ["参考", "リンク"],
-    }
     def __init__(self, settings: GeneratorSettings, api_key: str, dry_run: bool = False) -> None:
         self.settings = settings
         self.logger = setup_logger("article", settings.logs_dir)
@@ -62,9 +55,11 @@ class ArticleGenerator:
         else:
             response = self.model.generate_content([prompt])
             text = self._extract_text(response)
-        text = self._ensure_sections_present(text, keyword, plan)
+        required_sections = list(self.settings.article.required_sections)
+        text = self._ensure_sections_present(text, keyword, plan, required_sections)
         self.logger.info("Generated article body for '%s'", keyword)
         body = self._enforce_length(text)
+        body = self._ensure_balanced_fences(body)
         return GeneratedArticle(
             lead="",
             sections=self.settings.article.required_sections,
@@ -250,21 +245,21 @@ class ArticleGenerator:
 
         return current
 
-    def _ensure_sections_present(self, text: str, keyword: str, plan: dict) -> str:
+    def _ensure_sections_present(
+        self, text: str, keyword: str, plan: dict, required_sections: list[str]
+    ) -> str:
         normalized_text = unicodedata.normalize("NFKC", text or "")
-        missing = []
-        for section in self.settings.article.required_sections:
-            normalized_section = unicodedata.normalize("NFKC", section)
-            if normalized_section in normalized_text:
-                continue
-            heading_variant = unicodedata.normalize("NFKC", f"## {section}")
-            if heading_variant in normalized_text:
-                continue
-            missing.append(section)
+        missing = [
+            section for section in required_sections if not section_present(normalized_text, section)
+        ]
         if missing:
-            text, normalized_text, missing = self._attempt_canonicalize_sections(text, missing)
+            text, normalized_text, missing = self._attempt_canonicalize_sections(
+                text, missing, required_sections
+            )
         if missing and not self.dry_run and getattr(self, "model", None):
-            text, normalized_text, missing = self._fill_missing_sections(text, normalized_text, missing, keyword, plan)
+            text, normalized_text, missing = self._fill_missing_sections(
+                text, normalized_text, missing, keyword, plan
+            )
         if missing:
             self.logger.error("Model output missing required sections: %s", ", ".join(missing))
             preview = (text or "").strip().replace("\n", "\\n")
@@ -292,7 +287,7 @@ class ArticleGenerator:
         return text
 
     def _attempt_canonicalize_sections(
-        self, text: str, missing: List[str]
+        self, text: str, missing: List[str], targets: List[str]
     ) -> tuple[str, str, List[str]]:
         if not text:
             return text, unicodedata.normalize("NFKC", text or ""), missing
@@ -300,23 +295,23 @@ class ArticleGenerator:
         remaining_indices = list(range(len(sections)))
         matched: dict[str, int] = {}
 
-        for section_name in self.settings.article.required_sections:
-            section_norm = unicodedata.normalize("NFKC", section_name)
+        for section_name in targets:
             found_idx = None
             for idx in remaining_indices:
                 heading_norm = unicodedata.normalize(
                     "NFKC", self._normalize_heading(sections[idx].heading)
                 )
-                if section_norm in heading_norm:
+                alias_match = find_best_match(heading_norm, [section_name])
+                if alias_match:
                     found_idx = idx
                     break
             if found_idx is None:
-                keywords = self.SECTION_KEYWORDS.get(section_name, [])
+                keywords = self._section_keywords(section_name)
                 for idx in remaining_indices:
                     heading_norm = unicodedata.normalize(
                         "NFKC", self._normalize_heading(sections[idx].heading)
                     )
-                    if all(keyword in heading_norm for keyword in keywords if keyword):
+                    if all(keyword and keyword in heading_norm for keyword in keywords):
                         found_idx = idx
                         break
             if found_idx is not None:
@@ -338,12 +333,8 @@ class ArticleGenerator:
 
         normalized_text = unicodedata.normalize("NFKC", text or "")
         remaining_missing = []
-        for section_name in self.settings.article.required_sections:
-            normalized_section = unicodedata.normalize("NFKC", section_name)
-            if normalized_section in normalized_text:
-                continue
-            heading_variant = unicodedata.normalize("NFKC", f"## {section_name}")
-            if heading_variant in normalized_text:
+        for section_name in targets:
+            if section_present(normalized_text, section_name):
                 continue
             remaining_missing.append(section_name)
         return text, normalized_text, remaining_missing
@@ -375,11 +366,7 @@ class ArticleGenerator:
         normalized_text = unicodedata.normalize("NFKC", updated or "")
         remaining_missing = []
         for section_name in self.settings.article.required_sections:
-            normalized_section = unicodedata.normalize("NFKC", section_name)
-            if normalized_section in normalized_text:
-                continue
-            heading_variant = unicodedata.normalize("NFKC", f"## {section_name}")
-            if heading_variant in normalized_text:
+            if section_present(normalized_text, section_name):
                 continue
             remaining_missing.append(section_name)
         if remaining_missing:
@@ -477,6 +464,22 @@ class ArticleGenerator:
             f"{keyword} に関する {section_name} の要点を200字程度で整理し、読者の行動に繋がる実用的なアドバイスを提示してください。"
         )
         return f"## {section_name}\n{prompt}"
+
+    def _ensure_balanced_fences(self, body: str) -> str:
+        fence_count = body.count("```")
+        if fence_count % 2 == 0:
+            return body
+        self.logger.warning("Unbalanced code fence detected; appending closing fence")
+        return body.rstrip() + "\n```\n"
+
+    def _section_keywords(self, section_name: str) -> List[str]:
+        variants = [variant for variant in iter_section_variants(section_name) if variant]
+        if variants:
+            return variants
+        tokens = [section_name]
+        if "・" in section_name:
+            tokens.extend(section_name.split("・"))
+        return tokens
 
     def _split_into_units(self, text: str) -> tuple[List[str], List[SectionBlock]]:
         lines = text.strip().splitlines()
