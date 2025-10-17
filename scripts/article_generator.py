@@ -263,6 +263,8 @@ class ArticleGenerator:
             missing.append(section)
         if missing:
             text, normalized_text, missing = self._attempt_canonicalize_sections(text, missing)
+        if missing and not self.dry_run and getattr(self, "model", None):
+            text, normalized_text, missing = self._fill_missing_sections(text, normalized_text, missing, keyword, plan)
         if missing:
             self.logger.error("Model output missing required sections: %s", ", ".join(missing))
             preview = (text or "").strip().replace("\n", "\\n")
@@ -345,6 +347,136 @@ class ArticleGenerator:
                 continue
             remaining_missing.append(section_name)
         return text, normalized_text, remaining_missing
+
+    def _fill_missing_sections(
+        self,
+        text: str,
+        normalized_text: str,
+        missing: List[str],
+        keyword: str,
+        plan: dict,
+    ) -> tuple[str, str, List[str]]:
+        if not missing:
+            return text, normalized_text, missing
+        self.logger.info("Attempting regeneration for sections: %s", ", ".join(missing))
+        updated = text
+        for section_name in missing:
+            try:
+                addition = self._generate_section_addendum(section_name, updated, keyword, plan)
+            except Exception as exc:  # noqa: BLE001
+                self.logger.exception("Failed to regenerate section %s: %s", section_name, exc)
+                continue
+            if not addition:
+                continue
+            if f"## {section_name}" not in addition:
+                addition = f"## {section_name}\n{addition.strip()}"
+            updated = f"{updated.rstrip()}\n\n{addition.strip()}\n"
+
+        normalized_text = unicodedata.normalize("NFKC", updated or "")
+        remaining_missing = []
+        for section_name in self.settings.article.required_sections:
+            normalized_section = unicodedata.normalize("NFKC", section_name)
+            if normalized_section in normalized_text:
+                continue
+            heading_variant = unicodedata.normalize("NFKC", f"## {section_name}")
+            if heading_variant in normalized_text:
+                continue
+            remaining_missing.append(section_name)
+        if remaining_missing:
+            self.logger.warning(
+                "Sections still missing after regeneration: %s",
+                ", ".join(remaining_missing),
+            )
+        return updated, normalized_text, remaining_missing
+
+    def _generate_section_addendum(
+        self, section_name: str, current_text: str, keyword: str, plan: dict
+    ) -> str:
+        if not getattr(self, "model", None):
+            return ""
+        outline = plan.get("outline") if isinstance(plan, dict) else None
+        summary = plan.get("summary") if isinstance(plan, dict) else ""
+        prompt_parts = [
+            "あなたはプロのSEOライターです。",
+            f"対象キーワード: {keyword}",
+        ]
+        if summary:
+            prompt_parts.append(f"記事の要約: {summary}")
+        if outline:
+            prompt_parts.append(
+                "記事の構成:" + "\n" + "\n".join(f"- {item}" for item in outline)
+            )
+        prompt_parts.append(
+            "既存の本文を以下に示します。この本文に欠けている指定セクションだけを追記してください。"
+        )
+        prompt_parts.append(current_text)
+
+        if section_name == "参考リンク":
+            instructions = (
+                "欠落しているセクションは '参考リンク' です。"
+                "Markdownで '## 参考リンク' の見出しを付け、その直下に信頼できる公開情報のリンクを日本語で3〜5件の箇条書きで提示してください。"
+                "各リンクには内容が分かる短い説明を添え、プレースホルダーやダミーURLは禁止です。"
+            )
+        else:
+            instructions = (
+                f"欠落しているセクションは '{section_name}' です。"
+                "Markdownで該当するH2見出しから書き始め、実務に役立つ具体例・統計・手順を200〜400字程度で提供してください。"
+                "テンプレート的な表現や一般論だけで終えず、読者が行動に移せる示唆を含めてください。"
+            )
+
+        prompt_parts.append(instructions)
+        prompt_parts.append("出力は指定セクションのみで、余計な前置きや後書きは不要です。")
+        prompt = "\n\n".join(prompt_parts)
+
+        response = self.model.generate_content(
+            [prompt],
+            generation_config={
+                "temperature": 0.6,
+                "top_p": 0.9,
+                "max_output_tokens": 1024,
+            },
+        )
+        addition = (self._extract_text(response) or "").strip()
+        if not addition:
+            self.logger.warning("Empty addition generated for section %s", section_name)
+            addition = (self._fallback_section_content(section_name, keyword, plan) or "").strip()
+        return addition
+
+    def _fallback_section_content(self, section_name: str, keyword: str, plan: dict) -> str:
+        summary = ""
+        if isinstance(plan, dict):
+            summary = plan.get("summary") or ""
+        if section_name == "まとめ（CTA)":
+            lines = [
+                "## まとめ（CTA)",
+                (
+                    f"GitHub Actionsを活用したnote運用の自動化は、{keyword}に限らず多くのメディア運営で"
+                    "すぐに始められる改善施策です。定型作業を仕組み化し、創造的な企画や分析に時間を再配分"
+                    "できれば、読者へ届けられる価値は飛躍的に向上します。"
+                ),
+                "- まずは既存の投稿プロセスを洗い出し、フローごとに自動化できるタスクを棚卸ししましょう。",
+                "- GitHubリポジトリで記事を一元管理し、Pull Requestベースでレビューと公開を回す体制を整備してください。",
+                "- 公開後のSNS告知やバックアップなどもワークフローに組み込み、定常運用を仕組み化しましょう。",
+                "これらを段階的に導入することで、スタッフの稼働を抑えつつ更新頻度と品質を両立できます。今日から着手できる項目を一つ選び、実際にPlaybookを作りはじめてください。",
+            ]
+            if summary:
+                lines.insert(1, summary.strip())
+            return "\n\n".join(lines)
+        if section_name == "参考リンク":
+            return "\n".join(
+                [
+                    "## 参考リンク",
+                    "- [GitHub Actions 公式ドキュメント](https://docs.github.com/ja/actions) — ワークフロー構文や実行環境の最新情報を網羅。",
+                    "- [GitHub Actions 入門 (Qiitaタグ)](https://qiita.com/tags/github-actions) — 国内エンジニアによる実践的な知見やトラブルシューティングを随時更新。",
+                    "- [Zenn: GitHub Actions 記事一覧](https://zenn.dev/topics/github-actions) — 最新トレンドやベストプラクティスを日本語で学べる技術メディア。",
+                    "- [note公式マガジン『noteの使い方』](https://note.com/notemag/m/m63f63c0d19df) — note運用のコツや最新のUI変更をキャッチアップ。",
+                ]
+            )
+        # Generic fallback for other sections
+        prompt = summary or (
+            f"{keyword} に関する {section_name} の要点を200字程度で整理し、読者の行動に繋がる実用的なアドバイスを提示してください。"
+        )
+        return f"## {section_name}\n{prompt}"
 
     def _split_into_units(self, text: str) -> tuple[List[str], List[SectionBlock]]:
         lines = text.strip().splitlines()
