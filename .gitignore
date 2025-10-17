@@ -9,3 +9,4 @@ logs/
 *.jsonl
 *.cache
 assets/placeholder.jpg
+articles-queue/rejected/

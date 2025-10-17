@@ -240,22 +240,15 @@ class ArticleGenerator:
 
     def _ensure_sections_present(self, text: str, keyword: str, plan: dict) -> str:
         missing = [section for section in self.settings.article.required_sections if section not in text]
-        if not missing:
-            return text
-        fallback_body = self._dummy_body(keyword, plan)
-        _, fallback_sections = self._split_into_units(fallback_body)
-        fallback_map = {
-            self._normalize_heading(section.heading): "\n\n".join(section.paragraphs)
-            for section in fallback_sections
-        }
-        self.logger.warning("Supplementing missing sections with fallback content: %s", ", ".join(missing))
-        patched = text.rstrip()
-        for section in missing:
-            content = fallback_map.get(section)
-            if not content:
-                content = self._default_section_placeholder(section)
-            patched = f"{patched}\n\n## {section}\n{content.strip()}"
-        return patched
+        if missing:
+            self.logger.error("Model output missing required sections: %s", ", ".join(missing))
+            raise ValueError(f"Missing required sections: {', '.join(missing)}")
+        if self.settings.quality_gate.reject_phrases:
+            for phrase in self.settings.quality_gate.reject_phrases:
+                if phrase and phrase in text:
+                    self.logger.error("Model output contains rejected phrase: %s", phrase)
+                    raise ValueError("Contains rejected phrase")
+        return text
 
     def _split_into_units(self, text: str) -> tuple[List[str], List[SectionBlock]]:
         lines = text.strip().splitlines()
