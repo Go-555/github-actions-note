@@ -1,19 +1,20 @@
 ---
 title: noteクリエイター必見！GitHub Actionsで記事作成・公開を自動化する実践ガイド
 uuid: 63b51e4c-319e-4772-9b3f-64d1a61d404e
-summary: noteでの情報発信を続ける中で、記事の更新や公開作業に時間を取られていませんか？本記事では、GitHub Actionsを活用してnote運用を劇的に効率化する方法を解説します。多段ワークフローやReusable
+summary: >-
+  noteでの情報発信を続ける中で、記事の更新や公開作業に時間を取られていませんか？本記事では、GitHub Actionsを活用してnote運用を劇的に効率化する方法を解説します。多段ワークフローやReusable
   Workflowといった最新トレンドを取り入れつつ、多くの人が陥りがちなSecrets管理や同時実行の失
 tags:
-- GitHub Actions
-- note
-- 自動化
-- ワークフロー
-- SEO
-- コンテンツマーケティング
-- 効率化
-- CI/CD
-- 開発者ツール
-- ブログ運用
+  - GitHub Actions
+  - note
+  - 自動化
+  - ワークフロー
+  - SEO
+  - コンテンツマーケティング
+  - 効率化
+  - CI/CD
+  - 開発者ツール
+  - ブログ運用
 thumbnail: ./assets/notekurieitabi-jian-github-actionsteji-shi-zuo-cheng-gong-kai-wozi-dong-hua-surushi-jian-kaito-thumb.jpg
 hero_image: ./assets/notekurieitabi-jian-github-actionsteji-shi-zuo-cheng-gong-kai-wozi-dong-hua-surushi-jian-kaito-hero.jpg
 publish_at: '2025-10-18T15:27:00+09:00'
@@ -27,8 +28,11 @@ paywall: free
 theme: ビジネス
 tone: 読者の実務課題に寄り添うプロの編集者視点で、落ち着いた敬体で執筆してください。
 internal_images:
-- ./assets/notekurieitabi-jian-github-actionsteji-shi-zuo-cheng-gong-kai-wozi-dong-hua-surushi-jian-kaito-internal1.jpg
-- ./assets/notekurieitabi-jian-github-actionsteji-shi-zuo-cheng-gong-kai-wozi-dong-hua-surushi-jian-kaito-internal2.jpg
+  - >-
+    ./assets/notekurieitabi-jian-github-actionsteji-shi-zuo-cheng-gong-kai-wozi-dong-hua-surushi-jian-kaito-internal1.jpg
+  - >-
+    ./assets/notekurieitabi-jian-github-actionsteji-shi-zuo-cheng-gong-kai-wozi-dong-hua-surushi-jian-kaito-internal2.jpg
+posted_at: '2025-10-17T07:49:15.112Z'
 ---
 note運用において、記事の作成から公開、そして告知までの一連の作業は、時間と労力を要するものです。定期的な更新が求められる現代のデジタルマーケティングにおいて、これらの手作業がボトルネックとなり、コンテンツ制作の品質や更新頻度に影響を及ぼすことも少なくありません。本稿では、GitHub Actionsを活用し、note記事の投稿プロセスを自動化することで、これらの課題をどのように解決できるか、具体的な手順と注意点を交えながら解説します。
 
@@ -78,7 +82,7 @@ GitHub Actionsを用いた自動投稿ワークフローは、以下のような
 4.  **記事の変換・処理:** Markdownファイルを読み込み、必要に応じてHTML形式に変換したり、投稿に必要なメタデータを抽出したりします。
 5.  **noteへの投稿:** 変換された記事データと認証情報を用いて、noteの投稿エンドポイントへHTTPリクエストを送信するか、ヘッドレスブラウザでnoteの投稿画面を操作し、記事を公開します。
 
-![GitHub Actionsによるnote自動投稿ワークフローの概念図](./assets/workflow_concept.jpg)
+![GitHub Actionsによるnote自動投稿ワークフローの概念図](https://raw.githubusercontent.com/metamedia1999/github-actions-note/main/assets/workflow_concept.jpg)
 
 ### ステップ1: GitHubリポジトリの準備
 
