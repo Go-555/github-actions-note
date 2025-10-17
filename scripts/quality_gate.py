@@ -76,7 +76,9 @@ class QualityGate:
             heading_variant = unicodedata.normalize("NFKC", f"## {section}")
             if heading_variant in normalized_body:
                 continue
+            preview = (body or "").strip().replace("\n", "\\n")
             self.logger.error("Missing section: %s", section)
+            self.logger.error("Body preview snippet: %s", preview[:1000])
             return False
         return True
 
