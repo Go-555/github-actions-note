@@ -252,6 +252,8 @@ class ArticleGenerator:
             missing.append(section)
         if missing:
             self.logger.error("Model output missing required sections: %s", ", ".join(missing))
+            preview = (text or "").strip().replace("\n", "\\n")
+            self.logger.error("Body preview snippet: %s", preview[:1000])
             raise ValueError(f"Missing required sections: {', '.join(missing)}")
         if self.settings.quality_gate.reject_phrases:
             for phrase in self.settings.quality_gate.reject_phrases:
