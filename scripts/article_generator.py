@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import List
 
@@ -239,7 +240,16 @@ class ArticleGenerator:
         return current
 
     def _ensure_sections_present(self, text: str, keyword: str, plan: dict) -> str:
-        missing = [section for section in self.settings.article.required_sections if section not in text]
+        normalized_text = unicodedata.normalize("NFKC", text or "")
+        missing = []
+        for section in self.settings.article.required_sections:
+            normalized_section = unicodedata.normalize("NFKC", section)
+            if normalized_section in normalized_text:
+                continue
+            heading_variant = unicodedata.normalize("NFKC", f"## {section}")
+            if heading_variant in normalized_text:
+                continue
+            missing.append(section)
         if missing:
             self.logger.error("Model output missing required sections: %s", ", ".join(missing))
             raise ValueError(f"Missing required sections: {', '.join(missing)}")
@@ -247,6 +257,10 @@ class ArticleGenerator:
             for phrase in self.settings.quality_gate.reject_phrases:
                 if phrase and phrase in text:
                     self.logger.error("Model output contains rejected phrase: %s", phrase)
+                    raise ValueError("Contains rejected phrase")
+                normalized_phrase = unicodedata.normalize("NFKC", phrase)
+                if normalized_phrase and normalized_phrase in normalized_text:
+                    self.logger.error("Model output contains rejected phrase (normalized match): %s", phrase)
                     raise ValueError("Contains rejected phrase")
         return text
 
