@@ -4,6 +4,10 @@ import sys
 import argparse
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from scripts.config_loader import ConfigLoader
 from scripts.quality_gate import QualityGate
 
