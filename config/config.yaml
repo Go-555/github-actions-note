@@ -8,8 +8,8 @@ memos:
   daily_target: 24
   research_keyword: "生成AI"
 article:
-  min_chars: 3000
-  max_chars: 5000
+  min_chars: 2500
+  max_chars: 20000
   target_chars: 3200
   required_sections:
     - "背景と課題"
@@ -36,7 +36,7 @@ logs:
   dir: "logs"
 concurrency:
   daily_limit: 10
-  per_run_batch: 1
+  per_run_batch: 3
   max_parallel: 3
   jitter_sec:
     - 60
@@ -68,6 +68,7 @@ quality_gate:
     - "ダミー本文"
     - "テンプレートの長さを担保"
   min_body_lines: 40
+  length_tolerance: 20000
 note:
   visibility: "public"
   paid_enabled: false

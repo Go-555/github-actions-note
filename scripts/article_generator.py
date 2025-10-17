@@ -356,7 +356,7 @@ class ArticleGenerator:
                 addition = self._generate_section_addendum(section_name, updated, keyword, plan)
             except Exception as exc:  # noqa: BLE001
                 self.logger.exception("Failed to regenerate section %s: %s", section_name, exc)
-                continue
+                addition = self._fallback_section_content(section_name, keyword, plan)
             if not addition:
                 continue
             if f"## {section_name}" not in addition:

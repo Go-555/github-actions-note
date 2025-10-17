@@ -66,6 +66,7 @@ def main() -> int:
 
     success = 0
     failure = 0
+    archived_memos: set[Path] = set()
     for task in tasks[:batch_limit]:
         log_payload: Dict[str, str] = {"keyword": task.keyword}
         try:
@@ -111,8 +112,9 @@ def main() -> int:
             log_payload["error"] = str(exc)
             failure += 1
         finally:
-            if task.memo_path:
+            if task.memo_path and task.memo_path not in archived_memos:
                 memo_researcher.archive_memo(task.memo_path)
+                archived_memos.add(task.memo_path)
             append_jsonl(config.logs_dir / "run.jsonl", log_payload)
 
     logger.info("Batch finished: success=%s failure=%s", success, failure)

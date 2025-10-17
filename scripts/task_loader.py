@@ -7,12 +7,30 @@ from typing import List, Optional
 from scripts.config_loader import GeneratorSettings
 
 
-def _derive_keyword_from_memo(path: Path, content: str) -> str:
+def _extract_topics_from_memo(content: str, fallback: str) -> List[str]:
+    topics: List[str] = []
+    seen = set()
     for line in content.splitlines():
-        stripped = line.strip().lstrip('#').strip()
-        if stripped:
-            return stripped
-    return path.stem
+        stripped = line.strip()
+        if not stripped:
+            continue
+        heading = None
+        if stripped.startswith("#"):
+            heading = stripped.lstrip("#").strip()
+        elif stripped.startswith("-") or stripped.startswith("*"):
+            heading = stripped.lstrip("-* ").strip()
+        if heading:
+            normalized = heading.lower()
+            if normalized not in seen:
+                seen.add(normalized)
+                topics.append(heading)
+    if not topics:
+        first_line = fallback.strip()
+        if first_line:
+            topics.append(first_line)
+    if not topics:
+        topics.append("生成AI 最新動向")
+    return topics
 
 
 @dataclass
@@ -33,15 +51,16 @@ class TaskLoader:
         tasks: List[GenerationTask] = []
         for memo_path in memos:
             memo_content = memo_path.read_text(encoding="utf-8")
-            keyword = _derive_keyword_from_memo(memo_path, memo_content)
-            tasks.append(
-                GenerationTask(
-                    keyword=keyword,
-                    memo_path=memo_path,
-                    memo_content=memo_content,
-                    reference_paths=self.references,
+            topics = _extract_topics_from_memo(memo_content, memo_path.stem)
+            for topic in topics:
+                tasks.append(
+                    GenerationTask(
+                        keyword=topic,
+                        memo_path=memo_path,
+                        memo_content=memo_content,
+                        reference_paths=self.references,
+                    )
                 )
-            )
         return tasks[:limit]
 
     def _list_memos(self) -> List[Path]:

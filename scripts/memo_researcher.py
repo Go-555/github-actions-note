@@ -85,9 +85,12 @@ class MemoResearcher:
                 "required": ["title", "summary", "bullets"],
             },
         }
+        keyword = self.settings.memos.research_keyword
         prompt = (
-            "あなたは技術調査担当です。キーワード '生成AI' に関する最新トピックを"
+            "あなたは生成AIビジネスに詳しいリサーチャーです。"
+            f"キーワード '{keyword}' に関連する最新ニュース、ビジネス活用事例、規制・投資動向などを"
             f"{count} 件まとめ、JSON 配列で返してください。各要素は title, summary, bullets(3項目) を含むオブジェクトとします。"
+            "summary にはなぜ重要か、bullets には参照すべき具体的なトピックやリンクソースを示してください。"
         )
         memos: List[dict] = []
         try:

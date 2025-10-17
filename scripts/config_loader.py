@@ -78,6 +78,7 @@ class QualityGateConfig:
     max_link_errors: int = 0
     reject_phrases: List[str] = field(default_factory=list)
     min_body_lines: int = 0
+    length_tolerance: int = 0
 
 
 @dataclass
