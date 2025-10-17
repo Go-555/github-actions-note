@@ -19,7 +19,6 @@ from scripts.utils.sections import (
 )
 from scripts.utils.text import generate_slug
 
-
 @dataclass
 class GeneratedArticle:
     lead: str
@@ -27,12 +26,10 @@ class GeneratedArticle:
     references: List[str]
     body_markdown: str
 
-
 @dataclass
 class SectionBlock:
     heading: str
     paragraphs: List[str]
-
 
 class ArticleGenerator:
     """
@@ -51,18 +48,28 @@ class ArticleGenerator:
         self.logger = setup_logger("article", settings.logs_dir)
         self.dry_run = dry_run
         self.model = None
-        if not dry_run and api_key:
-            genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel(
-                model_name="models/gemini-2.5-flash",
-                generation_config={
-                    "temperature": 0.65,
-                    "top_p": 0.9,
-                    "max_output_tokens": 8192,
-                },
-            )
-        # dry_run 中でもモデルを使うオプション
+        # dry_run 中でもモデルを使うオプション（先に決める）
         self._dry_run_use_model = str(os.getenv("DRY_RUN_USE_MODEL", "")).lower() in {"1", "true", "yes", "on"}
+
+        # モデル初期化:
+        # - 通常: dry_run == False かつ api_key があれば初期化
+        # - dry_run 中でも DRY_RUN_USE_MODEL=true かつ api_key があれば初期化（dry-runで実モデルを試すオプション）
+        if api_key and (not dry_run or self._dry_run_use_model):
+            try:
+                genai.configure(api_key=api_key)
+                self.model = genai.GenerativeModel(
+                    model_name="models/gemini-2.5-flash",
+                    generation_config={
+                        "temperature": 0.65,
+                        "top_p": 0.9,
+                        "max_output_tokens": 8192,
+                    },
+                )
+                self.logger.info("Model initialized (dry_run=%s, dry_run_use_model=%s)", dry_run, self._dry_run_use_model)
+            except Exception:  # noqa: BLE001
+                # 初期化失敗しても致命的に止めない（フォールバックは _generate_with_model_or_empty 等で行う）
+                self.logger.exception("Failed to initialize model SDK; continuing without model")
+                self.model = None
 
     # ------------------------------------------------------------------
     # Public
@@ -330,7 +337,7 @@ class ArticleGenerator:
         lead = self._make_lead(keyword, plan)
         parts.append(lead)
 
-        # セクション本文
+        # セction本文
         for sec in sections_to_emit:
             if sec == "参考リンク":
                 parts.append(self._synth_ref_section())
@@ -359,235 +366,4 @@ class ArticleGenerator:
         summary = plan.get("summary") if isinstance(plan, dict) else None
         base = (
             f"{keyword} をテーマに、現場で使える手順とポイントを整理しました。"
-            "初見の読者でも迷わず実行に移せるよう、背景と結論、具体的な進め方、失敗しやすい箇所、実例、最後に次の一手までを短いステップで提示します。"
-        )
-        if summary:
-            base = str(summary).strip()[:180]
-        # 100〜200字程度に収める
-        if len(base) < 100:
-            base += " 読み手の前提知識を問わず、最短で成果に近づくためのヒントをまとめています。"
-        return base[:200]
-
-    def _synth_section_paragraphs(self, section: str, keyword: str, outline: List[str], summary: str) -> str:
-        if section == "背景と課題":
-            return (
-                "生成AIを巡る環境は高速で変化しており、社内の判断や運用体制が整わないまま試行錯誤だけが先行しがちです。"
-                "本稿では、なにから手を付ければよいかを明確にし、読み手が今すぐ着手できる下準備を提示します。"
-            )
-        if section.startswith("結論") or section == "結論":
-            return (
-                f"{keyword} を成功させる要点は『小さく始めてログと検証を残す』ことです。"
-                "意思決定ポイントを明確化し、効果検証と改善を最短サイクルで回す設計が、費用対効果を最大化します。"
-            )
-        if section == "手順":
-            return (
-                "1. 目的と評価指標を1枚にまとめる\n"
-                "2. 対象業務を分解し、反復部分から自動化・雛形化\n"
-                "3. 権限・データ取り扱い・レビュー体制を明文化\n"
-                "4. 小規模に実装して、結果とログを記録\n"
-                "5. フィードバックを踏まえて次の反復へ"
-            )
-        if section == "よくある失敗と対策":
-            return (
-                "・目的が曖昧なまま導入して効果測定できない → 先にKPIと判断基準を定義\n"
-                "・ハルシネーション対策が後手 → 出典ログと人間レビューを必須化\n"
-                "・属人運用で再現性がない → 手順書と雛形を先に作る"
-            )
-        if section == "事例・効果":
-            return (
-                "小売ではFAQ自動化で応答時間を半減、営業現場では定型文の自動生成で作業時間を30%削減するなど、"
-                "“小さく始める”設計が成果を押し上げた例が増えています。定量と定性の両面で効果を測るのが共通点です。"
-            )
-        if section.startswith("まとめ"):
-            return (
-                "今日からできるのは、対象業務の棚卸しと評価指標の言語化です。まずは1週間だけ小さな実験計画を立て、"
-                "ログと学びを残す運用に切り替えましょう。継続すれば、負担を増やさず成果が積み上がります。"
-            )
-        # デフォルト: セクション名に沿った無難な本文
-        return (
-            f"{section} では、{keyword} の実務運用でつまずきやすいポイントを短い段落で整理します。"
-            "前提条件、判断基準、作業の分担、見落としがちな制約を明記し、読み手が次の一手を取りやすい形に整えます。"
-        )
-
-    def _synth_ref_section(self) -> str:
-        lines = [
-            "## 参考リンク",
-            "- https://docs.github.com/ja/actions",
-            "- https://cloud.google.com/ai-studio?hl=ja",
-            "- https://note.com/notemag/m/m63f63c0d19df",
-        ]
-        return "\n".join(lines)
-
-    # ------------------------------------------------------------------
-    # Lead / references / structure utils
-    # ------------------------------------------------------------------
-    def _extract_lead(self, body: str) -> tuple[str, str]:
-        if not body:
-            return "", ""
-        lines = body.lstrip().splitlines()
-        if not lines:
-            return "", body
-        # 先頭行が見出しならリードなし扱い
-        if lines[0].lstrip().startswith(('#', '##')):
-            return "", body
-        lead_lines = []
-        rest_lines = []
-        saw_blank = False
-        for ln in lines:
-            if not saw_blank and not ln.strip():
-                saw_blank = True
-                continue
-            if not saw_blank:
-                lead_lines.append(ln)
-            else:
-                rest_lines.append(ln)
-        lead = "\n".join(lead_lines).strip()
-        rest = "\n".join(rest_lines).lstrip()
-        return lead, rest
-
-    def _extract_references(self, body: str) -> List[str]:
-        refs: List[str] = []
-        if not body:
-            return refs
-        m = re.search(r"##\s*参考リンク[\s\S]*$", body, flags=re.MULTILINE)
-        if not m:
-            return refs
-        block = m.group(0)
-        for url in re.findall(r"https?://\S+", block):
-            refs.append(url.rstrip(").]、。,"))
-        return refs
-
-    # ------------------------------------------------------------------
-    # Length / structure safety
-    # ------------------------------------------------------------------
-    def _enforce_length(self, text: str) -> str:
-        min_len = self.settings.article.min_chars
-        max_len = self.settings.article.max_chars
-        body = (text or "").strip()
-        if not body:
-            return body
-        if len(body) <= max_len:
-            if len(body) < min_len:
-                self.logger.warning("Generated body shorter than minimum: %s chars", len(body))
-            return body
-        # 超過時は末尾優先でソフトカット
-        fallback = body[:max_len]
-        cutoff = fallback.rfind("\n\n")
-        if cutoff >= max_len // 2:
-            return fallback[:cutoff].rstrip()
-        for punct in ("。", "．", "！", "？", "!", "?"):
-            idx = fallback.rfind(punct)
-            if idx >= max_len // 2:
-                return fallback[: idx + 1].rstrip()
-        return fallback.rstrip()
-
-    def _ensure_balanced_fences(self, body: str) -> str:
-        fence_count = body.count("```")
-        if fence_count % 2 == 0:
-            return body
-        self.logger.warning("Unbalanced code fence detected; appending closing fence")
-        return body.rstrip() + "\n```\n"
-
-    # ------------------------------------------------------------------
-    # Section parsing helpers (kept compatible)
-    # ------------------------------------------------------------------
-    def _section_keywords(self, section_name: str) -> List[str]:
-        variants = [v for v in iter_section_variants(section_name) if v]
-        if variants:
-            return variants
-        tokens = [section_name]
-        if "・" in section_name:
-            tokens.extend(section_name.split("・"))
-        return tokens
-
-    def _split_into_units(self, text: str) -> tuple[List[str], List[SectionBlock]]:
-        lines = text.strip().splitlines()
-        preface: List[str] = []
-        sections: List[SectionBlock] = []
-        current: Optional[SectionBlock] = None
-        buf: List[str] = []
-
-        def flush() -> None:
-            nonlocal buf, current
-            paragraph = "\n".join(buf).strip()
-            buf = []
-            if not paragraph:
-                return
-            if current is None:
-                preface.append(paragraph)
-            else:
-                current.paragraphs.append(paragraph)
-
-        for line in lines:
-            stripped = line.lstrip()
-            if stripped.startswith("##") and not stripped.startswith("###"):
-                flush()
-                heading_body = stripped[2:].lstrip()
-                heading_text = f"## {heading_body}" if heading_body else "##"
-                current = SectionBlock(heading=heading_text, paragraphs=[])
-                sections.append(current)
-                buf = []
-                continue
-            if stripped == "":
-                flush()
-                continue
-            buf.append(line)
-        flush()
-        return preface, sections
-
-    def _compose_from_units(self, preface: List[str], sections: List[SectionBlock]) -> str:
-        parts: List[str] = []
-        parts.extend(preface)
-        for section in sections:
-            parts.append(section.heading)
-            parts.extend(section.paragraphs)
-        return "\n\n".join(parts).strip()
-
-    def _normalize_heading(self, heading: str) -> str:
-        without_hash = heading.lstrip("#").strip()
-        return without_hash
-
-    def _fallback_section_content(self, section_name: str, keyword: str, plan: dict) -> str:
-        # 最小限のフォールバック。ダミー・プレースホルダ表現は避ける。
-        mapping: Dict[str, str] = {
-            "背景と課題": (
-                "現場での導入は期待値だけが先行しやすく、運用体制や効果測定が後回しになる傾向があります。"
-                "本節では着手の勘所と、検討を止めないための最低限の準備を述べます。"
-            ),
-            "結論": (
-                f"{keyword} の成功条件は『小さく始め、検証ログを残す』ことです。判断ポイントを明確にし、改善ループを短く回しましょう。"
-            ),
-            "手順": (
-                "1. 目的と評価指標を定義\n2. 対象業務を分解\n3. 権限とレビュー体制を整備\n4. 小規模実装\n5. 検証と改善"
-            ),
-            "よくある失敗と対策": (
-                "・効果測定が曖昧 → KPIと判断基準を先に定義\n・データ扱いの不備 → 取り扱いルールを明文化\n・属人運用 → 手順書化"
-            ),
-            "事例・効果": (
-                "質問応答の自動化や定型文生成で、処理時間の短縮と均質化を実現した例が増えています。"
-            ),
-            "まとめ（CTA)": (
-                "まずは1週間の小さな実験計画を作り、ログを残す運用に切り替えましょう。継続すれば成果が積み上がります。"
-            ),
-            "参考リンク": (
-                "- https://docs.github.com/ja/actions\n- https://cloud.google.com/ai-studio?hl=ja\n- https://note.com/notemag/m/m63f63c0d19df"
-            ),
-        }
-        content = mapping.get(section_name)
-        if content and section_name == "参考リンク":
-            return f"## 参考リンク\n{content}"
-        if content:
-            return f"## {section_name}\n{content}"
-        return f"## {section_name}\n{keyword} に関する要点を簡潔に整理し、次の一手を明確にします。"
-
-    def _persist_debug(self, text: str, keyword: str) -> None:
-        try:
-            debug_dir = self.settings.logs_dir / "debug"
-            debug_dir.mkdir(parents=True, exist_ok=True)
-            timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-            slug = generate_slug(keyword or "article")
-            debug_path = debug_dir / f"{slug}-{timestamp}.md"
-            debug_path.write_text(text or "", encoding="utf-8")
-            self.logger.error("Saved failing body to %s", debug_path)
-        except Exception:  # noqa: BLE001
-            self.logger.exception("Failed to persist debug article body")
+            "初見の読者でも迷わず実行に移せるよう、背景と結論、具体的な進め方、失敗しやすい箇所、実例、最後に次の一手までを短いステッ��[...]
