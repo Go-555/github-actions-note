@@ -27,6 +27,15 @@ class SectionBlock:
 
 
 class ArticleGenerator:
+    SECTION_KEYWORDS = {
+        "背景と課題": ["背景", "課題"],
+        "結論（先出し）": ["結論", "先"],
+        "手順": ["手順", "ステップ"],
+        "よくある失敗と対策": ["失敗", "対策"],
+        "事例・効果": ["事例", "効果", "成果"],
+        "まとめ（CTA)": ["まとめ", "CTA", "行動"],
+        "参考リンク": ["参考", "リンク"],
+    }
     def __init__(self, settings: GeneratorSettings, api_key: str, dry_run: bool = False) -> None:
         self.settings = settings
         self.logger = setup_logger("article", settings.logs_dir)
@@ -251,6 +260,8 @@ class ArticleGenerator:
                 continue
             missing.append(section)
         if missing:
+            text, normalized_text, missing = self._attempt_canonicalize_sections(text, missing)
+        if missing:
             self.logger.error("Model output missing required sections: %s", ", ".join(missing))
             preview = (text or "").strip().replace("\n", "\\n")
             self.logger.error("Body preview snippet: %s", preview[:1000])
@@ -265,6 +276,63 @@ class ArticleGenerator:
                     self.logger.error("Model output contains rejected phrase (normalized match): %s", phrase)
                     raise ValueError("Contains rejected phrase")
         return text
+
+    def _attempt_canonicalize_sections(
+        self, text: str, missing: List[str]
+    ) -> tuple[str, str, List[str]]:
+        if not text:
+            return text, unicodedata.normalize("NFKC", text or ""), missing
+        preface, sections = self._split_into_units(text)
+        remaining_indices = list(range(len(sections)))
+        matched: dict[str, int] = {}
+
+        for section_name in self.settings.article.required_sections:
+            section_norm = unicodedata.normalize("NFKC", section_name)
+            found_idx = None
+            for idx in remaining_indices:
+                heading_norm = unicodedata.normalize(
+                    "NFKC", self._normalize_heading(sections[idx].heading)
+                )
+                if section_norm in heading_norm:
+                    found_idx = idx
+                    break
+            if found_idx is None:
+                keywords = self.SECTION_KEYWORDS.get(section_name, [])
+                for idx in remaining_indices:
+                    heading_norm = unicodedata.normalize(
+                        "NFKC", self._normalize_heading(sections[idx].heading)
+                    )
+                    if all(keyword in heading_norm for keyword in keywords if keyword):
+                        found_idx = idx
+                        break
+            if found_idx is not None:
+                matched[section_name] = found_idx
+                remaining_indices.remove(found_idx)
+
+        updated = False
+        for section_name, idx in matched.items():
+            normalized_heading = unicodedata.normalize(
+                "NFKC", self._normalize_heading(sections[idx].heading)
+            )
+            target_norm = unicodedata.normalize("NFKC", section_name)
+            if target_norm != normalized_heading:
+                sections[idx].heading = f"## {section_name}"
+                updated = True
+
+        if updated:
+            text = self._compose_from_units(preface, sections)
+
+        normalized_text = unicodedata.normalize("NFKC", text or "")
+        remaining_missing = []
+        for section_name in self.settings.article.required_sections:
+            normalized_section = unicodedata.normalize("NFKC", section_name)
+            if normalized_section in normalized_text:
+                continue
+            heading_variant = unicodedata.normalize("NFKC", f"## {section_name}")
+            if heading_variant in normalized_text:
+                continue
+            remaining_missing.append(section_name)
+        return text, normalized_text, remaining_missing
 
     def _split_into_units(self, text: str) -> tuple[List[str], List[SectionBlock]]:
         lines = text.strip().splitlines()
