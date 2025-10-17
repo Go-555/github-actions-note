@@ -35,7 +35,7 @@ class ArticleGenerator:
         "手順": ["手順", "ステップ"],
         "よくある失敗と対策": ["失敗", "対策"],
         "事例・効果": ["事例", "効果", "成果"],
-        "まとめ（CTA)": ["まとめ", "CTA", "行動"],
+        "まとめ（CTA)": ["まとめ"],
         "参考リンク": ["参考", "リンク"],
     }
     def __init__(self, settings: GeneratorSettings, api_key: str, dry_run: bool = False) -> None:
