@@ -94,7 +94,7 @@ jobs:
           fi
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          paths=("articles-queue" "articles-posted" "assets" "logs")
+          paths=("articles-queue" "articles-posted" "assets")
           for path in "${paths[@]}"; do
             if [ -e "$path" ]; then
               git add "$path"
