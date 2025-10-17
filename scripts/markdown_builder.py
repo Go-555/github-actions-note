@@ -39,6 +39,8 @@ class MarkdownBuilder:
             rel_path = p.relative_to(self.settings.assets_dir.parent)
             return f"./{rel_path.as_posix()}"
 
+        note_config = self.settings.note
+        paywall_enabled = note_config.paid_enabled or self.settings.defaults.paid
         fm = {
             "title": title,
             "uuid": str(uuid.uuid4()),
@@ -47,7 +49,7 @@ class MarkdownBuilder:
             "thumbnail": rel(thumbnail),
             "hero_image": rel(hero),
             "publish_at": random_publish_at(),
-            "visibility": self.settings.defaults.visibility,
+            "visibility": note_config.visibility or self.settings.defaults.visibility,
             "canonical_url": "",
             "series": self.settings.defaults.series,
             "notes": {
@@ -55,6 +57,12 @@ class MarkdownBuilder:
                 "generator_version": self.settings.generator_version,
             },
         }
+        fm["paywall"] = "paid" if paywall_enabled else "free"
+        if paywall_enabled:
+            fm["price"] = note_config.default_price or self.settings.defaults.price
+        if note_config.theme or self.settings.defaults.theme:
+            fm["theme"] = note_config.theme or self.settings.defaults.theme
+        fm["tone"] = self.settings.article.tone
         if internals:
             fm["internal_images"] = [rel(p) for p in internals]
         return fm

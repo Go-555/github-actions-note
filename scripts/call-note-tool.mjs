@@ -1,5 +1,5 @@
-import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, renameSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import readline from 'node:readline';
@@ -14,6 +14,7 @@ if (!toolName || !markdownPath) {
 const statePath = process.env.NOTE_POST_MCP_STATE_PATH || '/tmp/note-state.json';
 const screenshotDir = process.env.SCREENSHOT_DIR || '/tmp/screens';
 const resultPath = process.env.NOTE_POST_RESULT_PATH || '';
+const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
 
 if (!existsSync(markdownPath)) {
   console.error('記事ファイルが見つかりません:', markdownPath);
@@ -22,6 +23,34 @@ if (!existsSync(markdownPath)) {
 if (!existsSync(statePath)) {
   console.error('認証stateが見つかりません:', statePath);
   process.exit(1);
+}
+
+function moveToRejected(filePath) {
+  try {
+    const queueDir = path.dirname(filePath);
+    const rejectedDir = path.join(queueDir, 'rejected');
+    mkdirSync(rejectedDir, { recursive: true });
+    let target = path.join(rejectedDir, path.basename(filePath));
+    if (existsSync(target)) {
+      const parsed = path.parse(target);
+      target = path.join(rejectedDir, `${parsed.name}-${Date.now()}${parsed.ext}`);
+    }
+    renameSync(filePath, target);
+    console.warn('Moved article to rejected queue:', target);
+  } catch (error) {
+    console.warn('Failed to move article to rejected folder:', error);
+  }
+}
+
+const qualityCheck = spawnSync('python3', ['scripts/quality_gate_runner.py', '--file', markdownPath], {
+  cwd: workspace,
+  stdio: 'inherit',
+});
+
+if (qualityCheck.status !== 0) {
+  console.error('Quality gate failed. Skipping posting.');
+  moveToRejected(markdownPath);
+  process.exit(0);
 }
 
 const notePostBin = path.resolve('tools/note-post-mcp/build/index.js');

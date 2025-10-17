@@ -37,12 +37,19 @@ jobs:
         run: |
           node scripts/select-next-article.mjs
 
+      - name: Quality gate selected article
+        if: steps.select.outputs.path != ''
+        id: quality
+        continue-on-error: true
+        run: |
+          python3 scripts/quality_gate_runner.py --file "${{ steps.select.outputs.path }}"
+
       - name: Bail out if nothing to post
         if: steps.select.outputs.path == ''
         run: echo "No article selected; exiting."
 
       - name: Restore note auth state from Secret (base64)
-        if: steps.select.outputs.path != ''
+        if: steps.select.outputs.path != '' && steps.quality.conclusion == 'success'
         env:
           NOTE_STATE_B64: ${{ secrets.NOTE_STATE_B64 }}
         run: |
@@ -52,7 +59,7 @@ jobs:
           echo "NOTE_POST_MCP_STATE_PATH=/tmp/note-state.json" >> $GITHUB_ENV
 
       - name: Rewrite asset paths for publishing
-        if: steps.select.outputs.path != ''
+        if: steps.select.outputs.path != '' && steps.quality.conclusion == 'success'
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
@@ -60,7 +67,7 @@ jobs:
           node tools/path_rewriter.mjs "${{ steps.select.outputs.path }}" "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME"
 
       - name: Publish article to note.com
-        if: steps.select.outputs.path != ''
+        if: steps.select.outputs.path != '' && steps.quality.conclusion == 'success'
         env:
           NOTE_POST_RESULT_PATH: /tmp/note-post-result.json
           DEBUG: 'note-post-mcp:*'
@@ -71,14 +78,14 @@ jobs:
           node scripts/call-note-tool.mjs publish_note "${{ steps.select.outputs.path }}"
 
       - name: Move article to posted folder
-        if: steps.select.outputs.path != ''
+        if: steps.select.outputs.path != '' && steps.quality.conclusion == 'success'
         run: |
           set -euo pipefail
           note_url=$(jq -r '.url // empty' /tmp/note-post-result.json 2>/dev/null || true)
           node scripts/mark-posted.mjs "${{ steps.select.outputs.path }}" "$note_url"
 
       - name: Commit queue updates
-        if: steps.select.outputs.path != ''
+        if: steps.select.outputs.path != '' && steps.quality.conclusion == 'success'
         run: |
           set -euo pipefail
           if git diff --quiet; then

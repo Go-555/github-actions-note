@@ -62,19 +62,23 @@ class ArticleGenerator:
 
     def _build_prompt(self, keyword: str, memo: str, plan: dict) -> str:
         sections = "\n".join(f"- {item}" for item in plan["outline"])
+        tone = self.settings.article.tone
+        target_chars = self.settings.article.target_chars
         return (
             "あなたはプロのSEOライターです。\n"
             f"キーワード: {keyword}\n"
             f"構成案:\n{sections}\n"
             f"メモ:\n{memo or 'なし'}\n"
             "以下の制約を守ってMarkdown本文を書いてください。\n"
-            "- 全体の文字数は 3,000〜5,000 字に収める\n"
+            f"- 全体の文字数は 3,000〜5,000 字に収めつつ、およそ {target_chars} 字を目指す\n"
+            "- 各セクションで固有名詞や数値、実務に基づく具体例を提示し、テンプレート文やダミー文言は一切書かない\n"
             "- リード文（100～200字）を先頭に書く\n"
             "- 背景と課題, 結論（先出し）, 手順, よくある失敗と対策, 事例・効果, まとめ（CTA), 参考リンク の順に H2 見出しを配置する\n"
             "- 必要に応じて H3/H4 を使い、読者に実務で役立つ洞察を提供する\n"
             "- 誇大表現や根拠のない断定は避け、一次情報や具体例を挙げる\n"
             "- 参考リンクは文末のリストで提示する\n"
             "- 画像を差し込みたい箇所には '![代替テキスト](./assets/placeholder.jpg)' の形式で記載する（後で差し替える）\n"
+            f"- 文体のトーン: {tone}\n"
             "- 日本語で書く\n"
         )
 

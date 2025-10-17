@@ -57,10 +57,27 @@ tools/path_rewriter.mjs # 投稿前に ./assets → Raw URL へ書き換え
 | `tools/path_rewriter.mjs` | 投稿前に `./assets/..` を Raw URL へ変換 |
 
 ## 使い方
-1. `config/config.yaml` で生成条件（文字数、並列数、daily_target など）を調整します。
+1. `config/config.yaml` で生成条件（文字数、トーン、1 回あたりの生成数など）を調整します。デフォルトでは 1 本生成・1 本投稿の流れに合わせて `per_run_batch=1` になっています。
 2. Secrets (`GEMINI_API_KEY`, `IMAGE_API_KEY`, `NOTE_STATE_B64`) を登録します。
 3. 乾燥実行は `Actions → Generate Articles → dry_run=1` で確認できます（品質ゲートはスキップされます）。
-4. 本番運用では dry_run を空欄にし、投稿ワークフローを有効化すれば毎時 1 本ずつ自動投稿されます。
+4. 本番運用では dry_run を空欄にし、投稿ワークフローを有効化すれば毎時 1 本ずつ自動投稿されます。品質ゲートに引っ掛かった記事は `articles-queue/rejected/` に退避され、投稿はスキップされます。
+
+### 設定ハイライト
+- `article.target_chars` / `article.tone` で本文の長さと文体を指定できます。
+- `quality_gate.reject_phrases` / `min_body_lines` によりテンプレ文やスカスカ記事を自動的に弾きます。
+- `note.*` および `defaults.paid` / `defaults.price` / `defaults.theme` で公開設定（無料/有料、価格、テーマ）を制御します。これらは front matter に書き込まれ、投稿時の UI 操作に反映されます。
+
+### 有料記事・テーマ設定
+front matter には自動で以下のキーが付与されます。
+
+```yaml
+paywall: paid    # or "free"
+price: 500       # paywall: paid の場合に使用
+theme: ビジネス   # note 側のチャンネル／テーマ
+visibility: public  # draft/unlisted/private にすると投稿せず下書き保存
+```
+
+`config/config.yaml` の `note` セクション、もしくは生成後に front matter を手修正することで有料公開・テーマを切り替えられます。ワークフローは UI のラジオボタン／入力欄を操作して反映します。
 
 ### ローカルでのテスト
 ```bash
@@ -73,9 +90,9 @@ python scripts/batch_runner.py
 生成結果は `articles-queue/` に保存され、dry run ではメモも自動補充されます。
 
 ## 注意事項
-- 生成本数を増減したい場合は `config.memos.daily_target` と `concurrency.per_run_batch` を変更してください。
+- 生成本数を増減したい場合は `config.memos.daily_target` と `concurrency.per_run_batch` を調整してください。投稿フローはキュー内の先頭 1 本のみ扱います。
 - API コストが大きいため、Google Cloud の利用制限と課金状況を定期的に確認してください。
-- 投稿後の Markdown は `articles-posted/` に移され、Front Matter に `note_url` と `posted_at` が追記されます。
+- 投稿後の Markdown は `articles-posted/` に移され、Front Matter に `posted_at` と `note_url` が追記されます。品質ゲートに落ちた記事は `articles-queue/rejected/` に移動します。
 - 乾燥実行では品質ゲートが緩和されます。実運転では dry_run=0 で必ずテストしてください。
 
 ## ライセンス

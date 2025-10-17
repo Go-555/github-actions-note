@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List
 
@@ -32,6 +32,7 @@ class MemoResearcher:
         self.settings.memos.trash_dir.mkdir(parents=True, exist_ok=True)
 
     def ensure_inventory(self, target_count: int) -> None:
+        self._cleanup_stale_memos()
         inbox = self.settings.memos.inbox_dir
         existing = list(inbox.glob("*.md"))
         desired = min(self.settings.memos.daily_target, target_count)
@@ -161,3 +162,14 @@ class MemoResearcher:
         for bullet in bullets:
             content_lines.append(f"- {bullet}")
         write_text(path, "\n".join(content_lines) + "\n")
+
+    def _cleanup_stale_memos(self) -> None:
+        threshold = datetime.now() - timedelta(days=1)
+        for memo in self.settings.memos.inbox_dir.glob("*.md"):
+            try:
+                mtime = datetime.fromtimestamp(memo.stat().st_mtime)
+            except FileNotFoundError:
+                continue
+            if mtime < threshold:
+                self.logger.info("Archiving stale memo %s", memo.name)
+                self.archive_memo(memo)

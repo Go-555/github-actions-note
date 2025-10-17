@@ -21,6 +21,10 @@ class QualityGate:
         body = self._extract_body(text)
         if not self._validate_length(body):
             return False
+        if not self._validate_reject_phrases(body):
+            return False
+        if not self._validate_body_depth(body):
+            return False
         if not self._validate_sections(body):
             return False
         if not self._validate_links(body):
@@ -73,6 +77,22 @@ class QualityGate:
         for word in self.settings.quality_gate.ng_words:
             if word in body:
                 self.logger.error("Contains NG word: %s", word)
+                return False
+        return True
+
+    def _validate_reject_phrases(self, body: str) -> bool:
+        for phrase in self.settings.quality_gate.reject_phrases:
+            if phrase and phrase in body:
+                self.logger.error("Contains rejected phrase: %s", phrase)
+                return False
+        return True
+
+    def _validate_body_depth(self, body: str) -> bool:
+        min_lines = self.settings.quality_gate.min_body_lines
+        if min_lines:
+            line_count = sum(1 for line in body.splitlines() if line.strip())
+            if line_count < min_lines:
+                self.logger.error("Body too shallow: %s lines < %s", line_count, min_lines)
                 return False
         return True
 

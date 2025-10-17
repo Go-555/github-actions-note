@@ -9,6 +9,7 @@ on:
       limit:
         description: 'Override number of articles to generate'
         required: false
+        default: '1'
   schedule:
     - cron: '0 15 * * *'  # JST 00:00
 
@@ -41,7 +42,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           IMAGE_API_KEY: ${{ secrets.IMAGE_API_KEY || secrets.GEMINI_API_KEY }}
           DRY_RUN: ${{ inputs.dry_run || '0' }}
-          BATCH_LIMIT: ${{ inputs.limit || '' }}
+          BATCH_LIMIT: ${{ inputs.limit || '1' }}
         run: |
           python scripts/batch_runner.py
 

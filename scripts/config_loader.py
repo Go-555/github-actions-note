@@ -19,9 +19,11 @@ class RetryConfig:
 class ArticleConfig:
     min_chars: int
     max_chars: int
+    target_chars: int
     required_sections: List[str]
     lead_min_chars: int
     lead_max_chars: int
+    tone: str
 
 
 @dataclass
@@ -57,6 +59,9 @@ class DefaultsConfig:
     tags: List[str]
     visibility: str
     series: str
+    paid: bool
+    price: int
+    theme: str
 
 
 @dataclass
@@ -71,6 +76,17 @@ class ConcurrencyConfig:
 class QualityGateConfig:
     ng_words: List[str] = field(default_factory=list)
     max_link_errors: int = 0
+    reject_phrases: List[str] = field(default_factory=list)
+    min_body_lines: int = 0
+
+
+@dataclass
+class NoteConfig:
+    visibility: str = "public"
+    paid_enabled: bool = False
+    default_price: int = 500
+    theme: str = ""
+    tone: str = ""
 
 
 @dataclass
@@ -86,6 +102,7 @@ class GeneratorSettings:
     concurrency: ConcurrencyConfig
     dedupe: DedupeConfig
     defaults: DefaultsConfig
+    note: NoteConfig
     retry: RetryConfig
     quality_gate: QualityGateConfig
 
@@ -115,6 +132,14 @@ class ConfigLoader:
         concurrency = ConcurrencyConfig(**data["concurrency"])
         dedupe = DedupeConfig(**data["dedupe"])
         defaults = DefaultsConfig(**data["defaults"])
+        note_data = data.get("note", {})
+        note = NoteConfig(
+            visibility=note_data.get("visibility", "public"),
+            paid_enabled=note_data.get("paid_enabled", False),
+            default_price=note_data.get("default_price", 500),
+            theme=note_data.get("theme", ""),
+            tone=note_data.get("tone", ""),
+        )
         retry = RetryConfig(**data.get("retry", {}))
         quality_gate = QualityGateConfig(**data.get("quality_gate", {}))
         return GeneratorSettings(
@@ -129,6 +154,7 @@ class ConfigLoader:
             concurrency=concurrency,
             dedupe=dedupe,
             defaults=defaults,
+            note=note,
             retry=retry,
             quality_gate=quality_gate,
         )

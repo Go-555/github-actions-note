@@ -78,11 +78,19 @@ function parseMarkdown(content: string): {
   title: string;
   body: string;
   tags: string[];
+  visibility: string;
+  paywall: string;
+  price: number | null;
+  theme: string;
 } {
   const lines = content.split('\n');
   let title = '';
   let body = '';
   const tags: string[] = [];
+  let visibility = '';
+  let paywall = '';
+  let price: number | null = null;
+  let theme = '';
   let inFrontMatter = false;
   let frontMatterEnded = false;
 
@@ -114,6 +122,18 @@ function parseMarkdown(content: string): {
         // 配列形式: - tag1
         const tag = line.trim().substring(1).trim().replace(/^["']|["']$/g, '');
         if (tag) tags.push(tag);
+      } else if (line.startsWith('visibility:')) {
+        visibility = line.substring(11).trim().replace(/^["']|["']$/g, '');
+      } else if (line.startsWith('paywall:')) {
+        paywall = line.substring(8).trim().replace(/^["']|["']$/g, '');
+      } else if (line.startsWith('price:')) {
+        const raw = line.substring(6).trim();
+        const numeric = parseInt(raw, 10);
+        if (!Number.isNaN(numeric)) {
+          price = numeric;
+        }
+      } else if (line.startsWith('theme:')) {
+        theme = line.substring(6).trim().replace(/^["']|["']$/g, '');
       }
       continue;
     }
@@ -134,6 +154,10 @@ function parseMarkdown(content: string): {
     title: title || 'Untitled',
     body: body.trim(),
     tags: tags.filter(Boolean),
+    visibility,
+    paywall,
+    price,
+    theme,
   };
 }
 
@@ -165,13 +189,33 @@ async function postToNote(params: {
     throw new Error(`Markdown file not found: ${markdownPath}`);
   }
   const mdContent = fs.readFileSync(markdownPath, 'utf-8');
-  const { title, body, tags } = parseMarkdown(mdContent);
+  const parsed = parseMarkdown(mdContent);
+  const { title, body, tags, visibility, paywall, price, theme } = parsed;
   
   // 本文中の画像を抽出
   const baseDir = path.dirname(markdownPath);
   const images = extractImages(body, baseDir);
 
-  log('Parsed markdown', { title, bodyLength: body.length, tags, imageCount: images.length });
+  log('Parsed markdown', {
+    title,
+    bodyLength: body.length,
+    tags,
+    imageCount: images.length,
+    visibility,
+    paywall,
+    price,
+    theme,
+  });
+
+  const visibilityMode = (visibility || (isPublic ? 'public' : 'draft')).toLowerCase();
+  let publishFlag = isPublic;
+  if (visibilityMode === 'draft') {
+    publishFlag = false;
+  } else if (visibilityMode === 'public') {
+    publishFlag = true;
+  }
+  const paywallMode = (paywall || 'free').toLowerCase();
+  const priceValue = typeof price === 'number' ? price : (paywallMode === 'paid' ? 500 : null);
 
   // 認証状態ファイルを確認
   if (!fs.existsSync(statePath)) {
@@ -529,7 +573,7 @@ async function postToNote(params: {
     log('Body set');
 
     // 下書き保存の場合
-    if (!isPublic) {
+    if (!publishFlag) {
       const saveBtn = page.locator('button:has-text("下書き保存"), [aria-label*="下書き保存"]').first();
       await saveBtn.waitFor({ state: 'visible', timeout });
       if (await saveBtn.isEnabled()) {
@@ -540,10 +584,7 @@ async function postToNote(params: {
 
       await page.screenshot({ path: screenshotPath, fullPage: true });
       const finalUrl = page.url();
-      log('Draft saved', { url: finalUrl });
-
-      await context.close();
-      await browser.close();
+      log('Draft saved', { url: finalUrl, visibility: visibilityMode, paywall: paywallMode });
 
       return {
         success: true,
@@ -567,6 +608,14 @@ async function postToNote(params: {
       page.waitForURL(/\/publish/i, { timeout }).catch(() => {}),
       page.locator('button:has-text("投稿する")').first().waitFor({ state: 'visible', timeout }).catch(() => {}),
     ]);
+
+    await applyPublishOptions(page, {
+      paywall: paywallMode,
+      price: priceValue,
+      theme,
+      visibility: visibilityMode,
+      timeout,
+    });
 
     // タグ入力
     if (tags.length > 0) {
@@ -602,7 +651,7 @@ async function postToNote(params: {
 
     await page.screenshot({ path: screenshotPath, fullPage: true });
     const finalUrl = page.url();
-    log('Published', { url: finalUrl });
+    log('Published', { url: finalUrl, visibility: visibilityMode, paywall: paywallMode, price: priceValue, theme });
 
     return {
       success: true,
@@ -631,6 +680,115 @@ async function postToNote(params: {
     await context?.close().catch(() => {});
     await browser.close().catch(() => {});
   }
+}
+
+async function applyPublishOptions(page: Page, options: {
+  paywall: string;
+  price: number | null;
+  theme: string;
+  visibility: string;
+  timeout: number;
+}) {
+  const { paywall, price, theme, visibility, timeout } = options;
+
+  try {
+    if (paywall === 'paid') {
+      const paidToggle = page.locator('label:has-text("有料")').first();
+      if (await paidToggle.count()) {
+        await paidToggle.click({ force: true });
+      } else {
+        const paidButton = page.locator('button:has-text("有料")').first();
+        if (await paidButton.count()) {
+          await paidButton.click({ force: true });
+        } else {
+          log('Paid toggle not found', { paywall });
+        }
+      }
+      if (price !== null) {
+        const priceInput = page.locator('input[type="number"], input[placeholder*="金額"], input[placeholder*="円"]').first();
+        if (await priceInput.count()) {
+          await priceInput.fill(String(price));
+        } else {
+          log('Price input not found', { price });
+        }
+      }
+    } else {
+      const freeToggle = page.locator('label:has-text("無料")').first();
+      if (await freeToggle.count()) {
+        await freeToggle.click({ force: true });
+      }
+    }
+  } catch (error) {
+    log('Failed to configure paywall', error);
+  }
+
+  try {
+    if (theme) {
+      const candidates = [
+        page.locator('button:has-text("テーマ")').first(),
+        page.locator('button:has-text("チャンネル")').first(),
+      ];
+      let resolvedButton: any = null;
+      for (const candidate of candidates) {
+        if (await candidate.count()) {
+          resolvedButton = candidate;
+          break;
+        }
+      }
+      if (resolvedButton && (await resolvedButton.count())) {
+        await resolvedButton.click({ force: true });
+        const option = page.locator(`[role="option"]:has-text("${theme}")`).first();
+        if (await option.count()) {
+          await option.click({ force: true });
+        } else {
+          const textOption = page.locator(`text=${theme}`).first();
+          if (await textOption.count()) {
+            await textOption.click({ force: true });
+          } else {
+            log('Theme option not found', { theme });
+          }
+        }
+        await page.keyboard.press('Escape').catch(() => {});
+      }
+    }
+  } catch (error) {
+    log('Failed to configure theme', { theme, error });
+  }
+
+  try {
+    if (visibility && visibility !== 'public') {
+      const settingButton = page.locator('button:has-text("公開設定")').first();
+      if (await settingButton.count()) {
+        await settingButton.click({ force: true });
+        let targetLabel = '';
+        if (visibility === 'unlisted' || visibility === 'limited') {
+          targetLabel = '限定公開';
+        } else if (visibility === 'private') {
+          targetLabel = '非公開';
+        }
+        if (targetLabel) {
+          const option = page.locator(`label:has-text("${targetLabel}")`).first();
+          if (await option.count()) {
+            await option.click({ force: true });
+          } else {
+            log('Visibility option not found', { visibility });
+          }
+        }
+        await page.keyboard.press('Escape').catch(() => {});
+      }
+    }
+  } catch (error) {
+    log('Failed to configure visibility', { visibility, error });
+  }
+
+  try {
+    await page.waitForTimeout(300);
+    await page.waitForLoadState('networkidle', { timeout }).catch(() => {});
+  } catch (error) {
+    log('Post-config wait encountered an error', error);
+  }
+
+  log('Publish options applied', { paywall, price, theme, visibility });
 }
 
 // Zodスキーマ定義
